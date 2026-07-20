@@ -19,7 +19,7 @@ function App(){
  const[day,setDay]=useState(1),[slot,setSlot]=useState(0),[done,setDone]=useState([false,false,false]),[seconds,setSeconds]=useState(4127),[selected,setSelected]=useState(1),[brief,setBrief]=useState(true);
  useEffect(()=>{const id=setInterval(()=>setSeconds(s=>s?s-1:14399),1000);return()=>clearInterval(id)},[]);
  useEffect(()=>setSelected(day),[day]);
- const clock=new Date(seconds*1000).toISOString().slice(11,19),mission=missions[slot],finish=()=>setDone(v=>v.map((x,i)=>i===slot||x)),reset=()=>{setDay(1);setSlot(0);setDone([false,false,false]);setSeconds(4127);setSelected(1);setBrief(true);window.scrollTo({top:0,behavior:'smooth'})};
+ const clock=new Date(seconds*1000).toISOString().slice(11,19),mission=missions[slot],finish=()=>setDone(v=>v.map((x,i)=>i===slot||x)),openDay=n=>{setSelected(n);if(n===day){setSlot(0);setBrief(true);setTimeout(()=>document.getElementById('active-mission')?.scrollIntoView({behavior:'smooth',block:'start'}),50)}},reset=()=>{setDay(1);setSlot(0);setDone([false,false,false]);setSeconds(4127);setSelected(1);setBrief(true);window.scrollTo({top:0,behavior:'smooth'})};
  return <div className="app">
   <nav className="global">
    <img className="fullLogo" src="/brand/card-madness-full.svg" alt="Card Madness"/><img className="symbolLogo" src="/brand/card-madness-symbol.svg" alt="Card Madness"/>
@@ -29,12 +29,12 @@ function App(){
   <main>
    <div className="back"><ArrowLeft/> Today</div>
    <header><button>‹</button><div><h1>CardMadness Free 114: Can You Beat A.J. Dillon?</h1><span className="statusDot"/></div><button>⌄</button><HelpCircle/></header>
-   <div className="competitionTabs"><button className="active">Missions <i>{done.filter(Boolean).length}</i></button><button>Portfolio</button><button>Earn</button><button>Trade</button><button>Standings</button></div>
+   <div className="competitionTabs"><button className="active" onClick={()=>openDay(day)}>Missions <i>{done.filter(Boolean).length}</i></button><button>Portfolio</button><button>Earn</button><button>Trade</button><button>Standings</button></div>
    <div className="metrics"><span><Trophy/><b>#12/107</b></span><span><WalletCards/><b>$1,383.81</b></span><span><BarChart3/><b>$4,193.22</b></span><span><Clock3/><b>Ends in 7d 08:24:43</b></span></div>
    <div className="missionTop"><span className="streak"><Zap/> New mission run</span><div><small>COMPETITION MISSIONS</small><h2>Your 14-day run</h2><p>Complete timed challenges to learn the competition, improve your portfolio, and keep your streak alive.</p></div><div className="missionStats"><span><b>{done.filter(Boolean).length}</b> completed</span><span><b>0</b> perfect days</span><span><b>{done.filter(Boolean).length*42}</b> mission points</span></div></div>
    <section className="journey">
     <div className="path"/>
-    {days.map((d,i)=>{const n=i+1,state=n<day?'past':n===day?'current':'future';return <article key={n} className={'node '+state+' '+(i%2?'right':'left')+(selected===n?' selected':'')} onClick={()=>setSelected(n)}>
+    {days.map((d,i)=>{const n=i+1,state=n<day?'past':n===day?'current':'future';return <article key={n} className={'node '+state+' '+(i%2?'right':'left')+(selected===n?' selected':'')} onClick={()=>openDay(n)}>
       <button className="orb">{state==='past'?<Check/>:state==='current'?<Zap/>:<LockKeyhole/>}</button>
       <div className="dayCard"><div><span>DAY {n}</span><small>{state==='past'?d[0]+' MISSIONS':state==='current'?'IN PROGRESS':n===14?'CHAMPIONSHIP':'LOCKED'}</small></div>
        {state==='past'&&<><h3>{d[1]}</h3><p><Check/> {d[2]} points earned</p></>}
@@ -44,7 +44,7 @@ function App(){
       {n===7&&<label><Gift/> HALFWAY REWARD</label>}{n===14&&<label><Trophy/> FINAL REWARD</label>}
     </article>})}
    </section>
-   {selected===day&&<section className="livePanel">
+   {selected===day&&<section className="livePanel" id="active-mission">
     <div className="panelHeader"><div><span><i/> LIVE NOW · {mission.window.toUpperCase()}</span><h2>{mission.title}</h2><p>{mission.short}</p></div><div className="timer"><small>EXPIRES IN</small><b>{clock}</b><em>{mission.time}</em></div></div>
     <div className="missionWindows">{missions.map((m,i)=>{const state=done[i]?'done':i===slot?'live':'locked';return <button key={m.window} className={state} onClick={()=>state!=='locked'&&(setSlot(i),setBrief(true))}>{state==='done'?<Check/>:state==='locked'?<LockKeyhole/>:<Clock3/>}<span><small>{m.window}</small><b>{state==='locked'?'Reveals when active':m.title}</b></span></button>})}</div>
     <div className="brief">
