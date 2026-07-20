@@ -1,6 +1,6 @@
 import React,{useEffect,useState}from'react';
 import{createRoot}from'react-dom/client';
-import{ArrowLeft,BarChart3,Check,ChevronDown,ChevronRight,Clock3,Coins,Gift,HelpCircle,LockKeyhole,Menu,ShoppingCart,Sparkles,Trophy,WalletCards,Zap}from'lucide-react';
+import{ArrowLeft,BarChart3,Check,ChevronDown,ChevronRight,Clock3,Coins,Gift,HelpCircle,LockKeyhole,Menu,RotateCcw,ShoppingCart,Sparkles,Trophy,WalletCards,Zap}from'lucide-react';
 import'./styles.css';
 
 const days=[
@@ -10,16 +10,16 @@ const days=[
  ['2/3','Two complete',78],['3/3','Championship',150]
 ];
 const missions=[
- {window:'Morning',time:'8:00 AM - 12:00 PM',title:'Review your five lowest-performing cards',short:'Identify opportunities before the market moves.',brief:'Your Portfolio contains every active card you have collected by opening packs or buying from the Trade window. Open your Portfolio and sort by performance to find the five cards that have lost the most value. Reviewing these cards helps you decide whether to hold for a recovery or sell and put your competition balance to work elsewhere.',action:'View portfolio',count:'5 cards reviewed'},
- {window:'Afternoon',time:'12:00 PM - 4:00 PM',title:'Sell a card from your portfolio',short:'Lock in a result and free up competition balance.',brief:'In your Portfolio you will find all the active cards you have collected from opening packs or buying from the Trade window. Enter your Portfolio and sell one card to complete this mission. Selling locks in the profit or loss on that card, and the virtual currency from the sale is deposited into your competition account balance. Hold that balance, buy another card, or open an Aura Pack - the next move is yours.',action:'Go to portfolio',count:'0 of 1 sold'},
- {window:'Evening',time:'4:00 PM - 8:00 PM',title:'Reinvest your competition balance',short:'Use today’s sale to make your next strategic move.',brief:'Your available balance appears in the competition status bar and increases when you sell a card. Visit the Trade window to research cards available in this competition, then buy one card that fits your strategy. You may also use the balance for an Aura Pack. Either action keeps your resources working inside the competition.',action:'Open trade window',count:'Available at 4 PM'}
+ {window:'Morning',time:'8:00 AM - 12:00 PM',title:'Open your Booster Pack',short:'Start your competition by revealing your first cards.',brief:'Your Booster Pack gives you cards that can immediately become part of your competition portfolio. Open the pack, reveal each card, and decide which cards you want to hold or sell. Cards you keep will begin moving with the market, while cards you sell return virtual currency to your competition account balance for future trades or Aura Packs.',action:'Open Booster Pack',count:'0 of 1 pack opened'},
+ {window:'Afternoon',time:'12:00 PM - 4:00 PM',title:'Play Guess the Price',short:'Learn how card values move before making a trade.',brief:'Guess the Price helps you build the market instincts you will use throughout the competition. Open the game from Earn, review the featured card and available information, then submit your best estimate of its market value. Completing the game introduces the price signals that can help you evaluate cards in your Portfolio and the Trade window.',action:'Play Guess the Price',count:'Available at 12 PM'},
+ {window:'Evening',time:'4:00 PM - 8:00 PM',title:'Buy or sell a card',short:'Make your first active portfolio decision.',brief:'Your Portfolio contains cards from opened packs and completed purchases. Sell a card to lock in its current profit or loss and move the proceeds into your competition balance, or visit the Trade window to buy a card you believe can gain value. Either choice completes the mission and begins building your competition strategy.',action:'Go to trade',count:'Available at 4 PM'}
 ];
 
 function App(){
- const[day,setDay]=useState(8),[slot,setSlot]=useState(1),[done,setDone]=useState([true,false,false]),[seconds,setSeconds]=useState(4127),[selected,setSelected]=useState(8),[brief,setBrief]=useState(true);
+ const[day,setDay]=useState(1),[slot,setSlot]=useState(0),[done,setDone]=useState([false,false,false]),[seconds,setSeconds]=useState(4127),[selected,setSelected]=useState(1),[brief,setBrief]=useState(true);
  useEffect(()=>{const id=setInterval(()=>setSeconds(s=>s?s-1:14399),1000);return()=>clearInterval(id)},[]);
  useEffect(()=>setSelected(day),[day]);
- const clock=new Date(seconds*1000).toISOString().slice(11,19),mission=missions[slot],finish=()=>setDone(v=>v.map((x,i)=>i===slot||x));
+ const clock=new Date(seconds*1000).toISOString().slice(11,19),mission=missions[slot],finish=()=>setDone(v=>v.map((x,i)=>i===slot||x)),reset=()=>{setDay(1);setSlot(0);setDone([false,false,false]);setSeconds(4127);setSelected(1);setBrief(true);window.scrollTo({top:0,behavior:'smooth'})};
  return <div className="app">
   <nav className="global">
    <img className="fullLogo" src="/brand/card-madness-full.svg" alt="Card Madness"/><img className="symbolLogo" src="/brand/card-madness-symbol.svg" alt="Card Madness"/>
@@ -29,9 +29,9 @@ function App(){
   <main>
    <div className="back"><ArrowLeft/> Today</div>
    <header><button>‹</button><div><h1>CardMadness Free 114: Can You Beat A.J. Dillon?</h1><span className="statusDot"/></div><button>⌄</button><HelpCircle/></header>
-   <div className="competitionTabs"><button>Portfolio</button><button>Earn</button><button>Trade</button><button>Standings</button><button className="active">Missions <i>{done.filter(Boolean).length}</i></button></div>
+   <div className="competitionTabs"><button className="active">Missions <i>{done.filter(Boolean).length}</i></button><button>Portfolio</button><button>Earn</button><button>Trade</button><button>Standings</button></div>
    <div className="metrics"><span><Trophy/><b>#12/107</b></span><span><WalletCards/><b>$1,383.81</b></span><span><BarChart3/><b>$4,193.22</b></span><span><Clock3/><b>Ends in 7d 08:24:43</b></span></div>
-   <div className="missionTop"><span className="streak"><Zap/> 38-day streak</span><div><small>COMPETITION MISSIONS</small><h2>Your 14-day run</h2><p>Complete timed challenges to learn the competition, improve your portfolio, and keep your streak alive.</p></div><div className="missionStats"><span><b>18</b> completed</span><span><b>5</b> perfect days</span><span><b>478</b> mission points</span></div></div>
+   <div className="missionTop"><span className="streak"><Zap/> New mission run</span><div><small>COMPETITION MISSIONS</small><h2>Your 14-day run</h2><p>Complete timed challenges to learn the competition, improve your portfolio, and keep your streak alive.</p></div><div className="missionStats"><span><b>{done.filter(Boolean).length}</b> completed</span><span><b>0</b> perfect days</span><span><b>{done.filter(Boolean).length*42}</b> mission points</span></div></div>
    <section className="journey">
     <div className="path"/>
     {days.map((d,i)=>{const n=i+1,state=n<day?'past':n===day?'current':'future';return <article key={n} className={'node '+state+' '+(i%2?'right':'left')+(selected===n?' selected':'')} onClick={()=>setSelected(n)}>
@@ -55,7 +55,7 @@ function App(){
    {selected<day&&<section className="daySummary"><Check/><div><small>DAY {selected} OUTCOME</small><h2>{days[selected-1][1]}</h2><p>{days[selected-1][0]} missions completed · {days[selected-1][2]} Mission Points earned</p></div><button onClick={()=>setSelected(day)}>Return to today</button></section>}
    {selected>day&&<section className="daySummary lockedSummary"><LockKeyhole/><div><small>DAY {selected} PREVIEW</small><h2>{selected===14?'Championship day':'A new challenge awaits'}</h2><p>Exact mission details stay hidden until each time window becomes active.</p></div><button onClick={()=>setSelected(day)}>Return to today</button></section>}
   </main>
-  <div className="controls"><small>PROTOTYPE</small><label>Day <select value={day} onChange={e=>{setDay(+e.target.value);setDone([true,false,false])}}>{days.map((_,i)=><option key={i}>{i+1}</option>)}</select></label><button onClick={finish}>Complete mission</button></div>
+  <button className="demoReset" onClick={reset}><RotateCcw/> Reset demo</button>
  </div>
 }
 createRoot(document.getElementById('root')).render(<App/>);
