@@ -1,6 +1,6 @@
 import React,{useState}from'react';
 import{createRoot}from'react-dom/client';
-import{ArrowRight,BarChart3,Check,ChevronRight,Coins,Crown,Gift,Lightbulb,Menu,PackageOpen,ShoppingCart,Sparkles,Target,TrendingDown,TrendingUp,UserRound,WalletCards,X}from'lucide-react';
+import{ArrowRight,BarChart3,Check,ChevronRight,Coins,Crown,Home,Layers3,Lightbulb,PackageOpen,ShoppingCart,Sparkles,Target,TrendingDown,TrendingUp,Trophy,UserRound,WalletCards,X}from'lucide-react';
 import'./styles.css';
 
 const steps=[
@@ -20,9 +20,10 @@ function App(){
  const[tab,setTab]=useState('coach'),[done,setDone]=useState([true,false,false,false,false]),[open,setOpen]=useState(true);
  const next=done.findIndex(x=>!x),complete=i=>setDone(v=>v.map((x,n)=>n===i?true:x));
  return <div className="app">
-  <nav><div className="brand"><i>CM</i><b>CARD<br/><span>MADNESS</span></b></div><div className="navlinks"><a className="active">Today</a><a>Competitions</a><a>Collection</a><a>Shop</a><a>How to play</a></div><div className="tools"><span><Coins/>19,105</span><Menu/></div></nav>
+  <div className="iosStatus"><span>9:41</span><b>â— â— â–°</b></div>
+  <nav><div className="brand"><i>CM</i><b>CARD <span>MADNESS</span></b></div><div className="tools"><span><Coins/>19,105</span><button><UserRound/></button></div></nav>
   <main>
-   <header><div><small>MONDAY Â· JULY 27</small><h1>Today</h1></div><div className="rank"><Crown/><span><small>YOUR RANK</small><b>#18</b></span><em>â†‘ 3 today</em></div></header>
+   <header><div><small>MONDAY Â· JULY 27</small><h1>Today</h1></div><button className="rank"><Crown/><span><small>YOUR RANK</small><b>#18</b></span><em>â†‘ 3</em></button></header>
    <div className="tabs">{[['coach','Coach'],['packs','Packs'],['highlights','PC Highlights'],['opportunities','Opportunities']].map(([id,label])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}>{id==='coach'&&<Sparkles/>}{label}{id==='coach'&&<i>3</i>}</button>)}</div>
    {tab!=='coach'?<section className="placeholder"><Sparkles/><h2>{tab==='packs'?'Your packs are ready':tab==='highlights'?'Your collection is moving':'New opportunities are waiting'}</h2><p>This tab remains available alongside Coach. Coach brings the most useful updates and next actions into one daily briefing.</p><button onClick={()=>setTab('coach')}>Back to Coach</button></section>:<>
     {open&&<section className="coachHero"><button className="close" onClick={()=>setOpen(false)}><X/></button><div className="coachFace"><UserRound/><i><Sparkles/></i></div><div className="briefing"><span>YOUR DAILY BRIEFING</span><h2>Good morning, Jeff. Letâ€™s make a move.</h2><p>You climbed <b>3 places</b> overnight. Youâ€™re now <strong>$126 from the prize zone</strong>, and two cards in your portfolio deserve a closer look.</p><div className="heroActions"><button onClick={()=>document.getElementById('insights').scrollIntoView({behavior:'smooth'})}>Show me what changed <ArrowRight/></button><small>Coach uses your portfolio, competition, and market activity to prioritize todayâ€™s best next steps.</small></div></div></section>}
@@ -36,6 +37,7 @@ function App(){
     <section className="finish"><div><BarChart3/><span><small>COMPETITION SNAPSHOT</small><h3>One strong move could put you in the Top 15.</h3><p>#18 Â· $126 behind the prize zone Â· 6 days remaining</p></span></div><button>View competition <ArrowRight/></button></section>
    </>}
   </main>
+  <div className="bottomNav"><button className="active"><Home/><span>Today</span></button><button><Trophy/><span>Compete</span></button><button className="coachTab"><i><Sparkles/></i><span>Coach</span></button><button><Layers3/><span>Collection</span></button><button><UserRound/><span>Profile</span></button></div>
  </div>
 }
 createRoot(document.getElementById('root')).render(<App/>);
