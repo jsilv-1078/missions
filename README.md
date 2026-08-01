@@ -1,21 +1,15 @@
-# Card Madness Daily Missions
+# Card Madness Pulse
 
-Interactive, Vercel-ready prototype for a three-window daily mission habit loop.
+A mobile-first, Reels-style sports card market feed demo for Card Madness.
 
 ## Features
 
-- Three exclusive daily windows with a live countdown
-- Complete, active, and locked mission states
-- Fourteen days of increasingly complex missions
-- Mission Points, streaks, perfect-day bonus, and reward milestones
-- Controls to simulate any day and time window
-- Responsive desktop and mobile layouts
+- Full-screen vertical story feed with scroll snapping
+- Player market summaries, card movers, news, and watch alerts
+- Responsive mobile and desktop layouts
+- Interactive watchlist controls and story navigation
+- Reduced-motion accessibility support
 
-## Run
+## Run locally
 
-```bash
-npm install
-npm run dev
-```
-
-Import the repository into Vercel; no environment variables are required. This is a front-end prototype with mock data. Authentication, persistence, event tracking, production rewards, and notifications are intentionally out of scope.
+Install dependencies with `npm install`, then run `npm run dev` and open http://localhost:3000.
