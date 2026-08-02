@@ -503,13 +503,24 @@ function DetailSheet({ story, onClose }: { story: Story; onClose: () => void }) 
   );
 }
 
-function StoryCard({ story, index, saved, onSave, onOpen }: { story: Story; index: number; saved: boolean; onSave: () => void; onOpen: () => void }) {
+function StoryCard({ story, index, saved, isActive, onSave, onOpen }: { story: Story; index: number; saved: boolean; isActive: boolean; onSave: () => void; onOpen: () => void }) {
   const isNews = story.format === "playerNews" || story.format === "cardNews";
   const cardFormats: Format[] = ["cardMarket","cardNews","recentSale","newRecord","watchlistAlert","populationChange","auctionEnding"];
   const isCard = cardFormats.includes(story.format);
+  const [isDwelling, setIsDwelling] = useState(false);
+  useEffect(() => {
+    if (!isActive) {
+      setIsDwelling(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setIsDwelling(true), 950);
+    return () => window.clearTimeout(timer);
+  }, [isActive]);
+  const glanceValue = story.stat ?? story.article?.source ?? "Market update";
+  const glanceLabel = story.statLabel ?? (story.article ? `${story.article.published} · ${story.article.readTime}` : story.subtitle);
   const primaryLabel = story.action ?? (story.article ? "Read story" : "View details");
   return (
-    <article className={`story format-${story.format} ${isCard ? "card-subject" : "player-subject"}`} style={{ "--accent": story.accent } as React.CSSProperties}>
+    <article className={`story format-${story.format} ${isCard ? "card-subject" : "player-subject"} ${isDwelling ? "is-dwelling" : "is-glancing"}`} style={{ "--accent": story.accent } as React.CSSProperties}>
       <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
       <div className="story-image" aria-hidden="true">
         <div className={`image-frame ${isCard ? "card-render" : ""}`}>
@@ -535,8 +546,16 @@ function StoryCard({ story, index, saved, onSave, onOpen }: { story: Story; inde
           <h1>{story.title}</h1>
           <p className="subtitle">{story.subtitle}</p>
         </div>
-        <StoryContent story={story}/>
-        <div className="chips">{story.chips.map((chip) => <span key={chip}>{chip}</span>)}</div>
+        <div className="glance-summary">
+          <span>{glanceLabel}</span>
+          <div><strong>{glanceValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
+        </div>
+        <div className="dwell-timer" aria-hidden="true"><i/></div>
+        <div className="dwell-content" aria-label={isDwelling ? "Supporting story information" : "Supporting information appears after a brief pause"}>
+          <p className="dwell-label">WHY IT MATTERS</p>
+          <StoryContent story={story}/>
+          <div className="chips">{story.chips.map((chip) => <span key={chip}>{chip}</span>)}</div>
+        </div>
         <div className="story-actions">
           <button onClick={onSave} className={saved ? "active" : ""} aria-label={saved ? "Remove from watchlist" : "Add to watchlist"}><b>{saved ? "★" : "☆"}</b><span>{saved ? "Saved" : "Watch"}</span></button>
           <button className="primary" onClick={onOpen}><span>{primaryLabel}</span><b>→</b></button>
@@ -565,7 +584,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <nav className="desktop-nav"><PulseLogo/><div><button className="selected">For You</button><button>Players</button><button>Cards</button><button>News</button></div><button className="profile">JS</button></nav>
-      <section className="feed" ref={feedRef} aria-label="Pulse market feed">{orderedStories.map((story, index) => <StoryCard key={story.title} story={story} index={index} saved={saved.includes(index)} onSave={() => setSaved((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index])} onOpen={() => setOpenStory(story)}/>)}</section>
+      <section className="feed" ref={feedRef} aria-label="Pulse market feed">{orderedStories.map((story, index) => <StoryCard key={story.title} story={story} index={index} saved={saved.includes(index)} isActive={active === index} onSave={() => setSaved((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index])} onOpen={() => setOpenStory(story)}/>)}</section>
       <div className="progress" aria-label={`Story ${active + 1} of ${orderedStories.length}`}>{orderedStories.map((_, index) => <button key={index} className={active === index ? "active" : ""} onClick={() => feedRef.current?.scrollTo({ top:index * (feedRef.current?.clientHeight ?? 0), behavior:"smooth" })} aria-label={`Go to story ${index + 1}`}/>)}</div>
       {openStory ? <DetailSheet story={openStory} onClose={() => setOpenStory(null)}/> : null}
       <footer className="mobile-nav"><button className="active"><b>⌁</b><span>Pulse</span></button><button><b>◎</b><span>Compete</span></button><button><b>▣</b><span>Collection</span></button><button><b>◇</b><span>Shop</span></button><button><b>○</b><span>Profile</span></button></footer>
