@@ -141,7 +141,167 @@ const stories: Story[] = [
       readTime: "4 min read",
       url: "https://www.dexerto.com/sports/victor-wembanyama-rookie-card-sells-for-record-5-11m-after-hobby-controversy-3368300/",
     },
+  },,
+  {
+    format: "playerMarket",
+    kicker: "PLAYER MARKET",
+    title: "Caitlin Clark",
+    subtitle: "Basketball · Indiana · 864 cards tracked",
+    image: "https://a.espncdn.com/i/headshots/wnba/players/full/4433403.png",
+    imageAlt: "Caitlin Clark",
+    accent: "#f59e0b",
+    change: "+8.6%",
+    stat: "$2.14M",
+    statLabel: "Tracked market cap",
+    chart: [41,43,42,47,49,46,53,55,58,61,60,67],
+    details: [{label:"30D sales",value:"$688K"},{label:"Market breadth",value:"76% up"},{label:"Avg. sale",value:"$294"},{label:"Top category",value:"Prizm RCs"}],
+    insight: "Premium rookies and numbered parallels are leading Clark’s market as women’s basketball demand expands.",
+    chips: ["Trending #2","Basketball","Rising volume"],
   },
+  {
+    format: "cardMarket",
+    kicker: "CARD MARKET",
+    title: "2024 Select Gold RC /10",
+    subtitle: "Caitlin Clark · Courtside · PSA 10",
+    image: "https://a.espncdn.com/i/headshots/wnba/players/full/4433403.png",
+    imageAlt: "Caitlin Clark",
+    accent: "#f59e0b",
+    change: "+11.2%",
+    stat: "$8,450",
+    statLabel: "Current market estimate",
+    details: [{label:"Set",value:"2024 Select"},{label:"Parallel",value:"Gold /10"},{label:"Grade",value:"PSA 10"},{label:"30D volume",value:"3 sales"}],
+    sales: [{date:"Jul 30",price:"$8,600",venue:"Auction"},{date:"Jul 12",price:"$8,250",venue:"Private"},{date:"Jun 29",price:"$8,500",venue:"Auction"}],
+    insight: "Low serial numbering limits liquidity, but recent results establish a narrow premium-market range.",
+    chips: ["Gold /10","PSA 10","Courtside"],
+  },
+  {
+    format: "playerMarket",
+    kicker: "PLAYER MARKET",
+    title: "LeBron James",
+    subtitle: "Basketball · Los Angeles · 4,180 cards tracked",
+    image: "https://a.espncdn.com/i/headshots/nba/players/full/1966.png",
+    imageAlt: "LeBron James",
+    accent: "#8b5cf6",
+    change: "+3.1%",
+    stat: "$18.9M",
+    statLabel: "Tracked market cap",
+    chart: [48,47,49,51,50,53,52,55,57,56,58,60],
+    details: [{label:"30D sales",value:"$3.24M"},{label:"Market breadth",value:"59% up"},{label:"Avg. sale",value:"$1,088"},{label:"Top category",value:"Chrome RCs"}],
+    insight: "LeBron’s market remains deep and liquid, with flagship rookies outperforming later-career releases.",
+    chips: ["Basketball","Blue chip","Deep liquidity"],
+  },
+  {
+    format: "cardMarket",
+    kicker: "CARD MARKET",
+    title: "2003 Topps Chrome RC",
+    subtitle: "LeBron James · Card #111 · PSA 10",
+    image: "https://a.espncdn.com/i/headshots/nba/players/full/1966.png",
+    imageAlt: "LeBron James",
+    accent: "#8b5cf6",
+    change: "+4.4%",
+    stat: "$14,800",
+    statLabel: "Current market estimate",
+    details: [{label:"Set",value:"2003 Topps Chrome"},{label:"Card",value:"#111 Rookie"},{label:"Grade",value:"PSA 10"},{label:"30D volume",value:"18 sales"}],
+    sales: [{date:"Jul 29",price:"$14,950",venue:"Auction"},{date:"Jul 21",price:"$14,500",venue:"Best Offer"},{date:"Jul 10",price:"$14,875",venue:"Auction"}],
+    insight: "Frequent sales make this one of the clearest benchmarks for LeBron’s flagship rookie market.",
+    chips: ["Flagship rookie","PSA 10","High liquidity"],
+  },
+  {
+    format: "playerMarket",
+    kicker: "PLAYER MARKET",
+    title: "Aaron Judge",
+    subtitle: "Baseball · New York · 2,206 cards tracked",
+    image: "https://a.espncdn.com/i/headshots/mlb/players/full/33192.png",
+    imageAlt: "Aaron Judge",
+    accent: "#06b6d4",
+    change: "+6.8%",
+    stat: "$6.72M",
+    statLabel: "Tracked market cap",
+    chart: [39,42,41,45,48,46,52,54,53,59,62,66],
+    details: [{label:"30D sales",value:"$1.11M"},{label:"Market breadth",value:"71% up"},{label:"Avg. sale",value:"$506"},{label:"Top category",value:"Chrome Autos"}],
+    insight: "Rookie autographs and numbered refractors are responding fastest to Judge’s on-field momentum.",
+    chips: ["Baseball","Power index","Strong breadth"],
+  },
+  {
+    format: "cardMarket",
+    kicker: "CARD MARKET",
+    title: "2017 Topps Chrome Refractor",
+    subtitle: "Aaron Judge · Card #169 · PSA 10",
+    image: "https://a.espncdn.com/i/headshots/mlb/players/full/33192.png",
+    imageAlt: "Aaron Judge",
+    accent: "#06b6d4",
+    change: "+9.3%",
+    stat: "$1,875",
+    statLabel: "Current market estimate",
+    details: [{label:"Set",value:"2017 Topps Chrome"},{label:"Parallel",value:"Refractor"},{label:"Grade",value:"PSA 10"},{label:"30D volume",value:"24 sales"}],
+    sales: [{date:"Jul 31",price:"$1,925",venue:"Auction"},{date:"Jul 25",price:"$1,850",venue:"Best Offer"},{date:"Jul 17",price:"$1,875",venue:"Auction"}],
+    insight: "Recent sales show consistent demand with limited price dispersion across major marketplaces.",
+    chips: ["Refractor","PSA 10","24 sales / 30D"],
+  },
+  {
+    format: "playerMarket",
+    kicker: "PLAYER MARKET",
+    title: "Patrick Mahomes",
+    subtitle: "Football · Kansas City · 2,744 cards tracked",
+    image: "https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png",
+    imageAlt: "Patrick Mahomes",
+    accent: "#ef4444",
+    change: "+2.7%",
+    stat: "$9.38M",
+    statLabel: "Tracked market cap",
+    chart: [50,49,51,50,53,55,54,57,56,59,60,62],
+    details: [{label:"30D sales",value:"$1.74M"},{label:"Market breadth",value:"56% up"},{label:"Avg. sale",value:"$812"},{label:"Top category",value:"Prizm RCs"}],
+    insight: "Mahomes remains football’s deepest modern market, led by scarce rookies and premium autographs.",
+    chips: ["Football","Blue chip","Deep liquidity"],
+  },
+  {
+    format: "cardMarket",
+    kicker: "CARD MARKET",
+    title: "2017 Prizm Silver RC",
+    subtitle: "Patrick Mahomes · Card #269 · PSA 10",
+    image: "https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png",
+    imageAlt: "Patrick Mahomes",
+    accent: "#ef4444",
+    change: "+3.8%",
+    stat: "$11,200",
+    statLabel: "Current market estimate",
+    details: [{label:"Set",value:"2017 Panini Prizm"},{label:"Parallel",value:"Silver"},{label:"Grade",value:"PSA 10"},{label:"30D volume",value:"11 sales"}],
+    sales: [{date:"Jul 28",price:"$11,400",venue:"Auction"},{date:"Jul 16",price:"$10,950",venue:"Private"},{date:"Jul 03",price:"$11,250",venue:"Auction"}],
+    insight: "A small but regular sales cadence continues to anchor the premium Mahomes rookie market.",
+    chips: ["Silver rookie","PSA 10","Premium football"],
+  },
+  {
+    format: "playerMarket",
+    kicker: "PLAYER MARKET",
+    title: "Connor McDavid",
+    subtitle: "Hockey · Edmonton · 1,506 cards tracked",
+    image: "https://a.espncdn.com/i/headshots/nhl/players/full/3895074.png",
+    imageAlt: "Connor McDavid",
+    accent: "#3b82f6",
+    change: "+5.5%",
+    stat: "$4.26M",
+    statLabel: "Tracked market cap",
+    chart: [43,45,44,48,47,52,50,55,57,56,61,64],
+    details: [{label:"30D sales",value:"$782K"},{label:"Market breadth",value:"64% up"},{label:"Avg. sale",value:"$519"},{label:"Top category",value:"Young Guns"}],
+    insight: "Young Guns rookies and premium Cup releases continue to define McDavid’s hockey market.",
+    chips: ["Hockey","Young Guns","Global demand"],
+  },
+  {
+    format: "cardMarket",
+    kicker: "CARD MARKET",
+    title: "2015 Upper Deck Young Guns",
+    subtitle: "Connor McDavid · Card #201 · PSA 10",
+    image: "https://a.espncdn.com/i/headshots/nhl/players/full/3895074.png",
+    imageAlt: "Connor McDavid",
+    accent: "#3b82f6",
+    change: "+7.1%",
+    stat: "$3,950",
+    statLabel: "Current market estimate",
+    details: [{label:"Set",value:"2015 Upper Deck"},{label:"Card",value:"#201 Young Guns"},{label:"Grade",value:"PSA 10"},{label:"30D volume",value:"29 sales"}],
+    sales: [{date:"Jul 30",price:"$4,050",venue:"Auction"},{date:"Jul 23",price:"$3,875",venue:"Best Offer"},{date:"Jul 14",price:"$3,925",venue:"Auction"}],
+    insight: "High sales frequency makes the Young Guns PSA 10 the central benchmark for McDavid collectors.",
+    chips: ["Young Guns","PSA 10","29 sales / 30D"],
+  }
 ];
 
 function PulseLogo() {
@@ -233,11 +393,26 @@ function StoryContent({ story }: { story: Story }) {
 
 function StoryCard({ story, index, saved, onSave }: { story: Story; index: number; saved: boolean; onSave: () => void }) {
   const isNews = story.format === "playerNews" || story.format === "cardNews";
+  const isCard = story.format === "cardMarket" || story.format === "cardNews";
   return (
     <article className={`story format-${story.format}`} style={{ "--accent": story.accent } as React.CSSProperties}>
       <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
       <div className="story-image" aria-hidden="true">
-        <div className="image-frame"><Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 60vw, 32vw" priority={index === 0}/><div className="photo-shade"/><span className="edition">0{index + 1}</span><span className="photo-name">{story.imageAlt}</span></div>
+        <div className={`image-frame ${isCard ? "card-render" : ""}`}>
+          {isCard ? (
+            <>
+              <div className="slab-label"><b>PSA</b><span>GEM MT</span><strong>10</strong></div>
+              <div className="card-art">
+                <Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 32vw, 22vw" priority={index === 0}/>
+                <div className="card-foil"/>
+                <div className="card-nameplate"><strong>{story.imageAlt}</strong><span>{story.title}</span></div>
+              </div>
+            </>
+          ) : (
+            <><Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 60vw, 32vw" priority={index === 0}/><div className="photo-shade"/><span className="photo-name">{story.imageAlt}</span></>
+          )}
+          <span className="edition">0{index + 1}</span>
+        </div>
         <span className={`format-pill ${isNews ? "editorial" : "market"}`}>{isNews ? "EDITORIAL" : "MARKET DATA"}</span>
       </div>
       <section className="story-content">
