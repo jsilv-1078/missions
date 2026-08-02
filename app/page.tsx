@@ -528,66 +528,106 @@ function scanTitle(story: Story) {
   return story.title;
 }
 
-function StoryCard({ story, index, saved, isActive, onSave, onOpen }: { story: Story; index: number; saved: boolean; isActive: boolean; onSave: () => void; onOpen: () => void }) {
-  const isNews = story.format === "playerNews" || story.format === "cardNews";
+function grabberText(story: Story) {
+  const grabbers: Partial<Record<Format, string>> = {
+    playerMarket:"The player market is moving now",
+    cardMarket:"A key card collectors are pricing today",
+    playerNews:"A hobby story collectors are talking about",
+    cardNews:"A sale reshaping the modern card market",
+    recentSale:"A fresh verified comp just hit the market",
+    biggestGain:"Today’s fastest-rising player market",
+    biggestDecline:"Today’s sharpest player-market pullback",
+    newRecord:"A new all-time hobby benchmark",
+    collectionChange:"Your cards made a meaningful move today",
+    watchlistAlert:"Your target price has been reached",
+    populationChange:"New supply could pressure prices",
+    auctionEnding:"A live opportunity is closing now",
+    playerMilestone:"A career moment is driving collector attention",
+    marketComparison:"Two superstar markets, one clear leader",
+    collectorsWatching:"Collector attention is accelerating quickly",
+    competitionOpportunity:"A potential move for your active lineup",
+  };
+  return grabbers[story.format] ?? story.insight;
+}
+
+function StoryMedia({ story, index, isCard }: { story: Story; index: number; isCard: boolean }) {
+  return (
+    <div className={`hero-media ${isCard ? "hero-card" : "hero-player"}`} aria-hidden="true">
+      <div className={`image-frame ${isCard ? "card-render" : ""}`}>
+        {isCard ? (
+          <>
+            <div className="slab-label"><b>PSA</b><span>GEM MT</span><strong>10</strong></div>
+            <div className="card-art">
+              <Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 48vw, 22vw" priority={index === 0}/>
+              <div className="card-foil"/>
+              <div className="card-nameplate"><strong>{story.imageAlt}</strong><span>{story.title}</span></div>
+            </div>
+          </>
+        ) : (
+          <><Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 58vw, 32vw" priority={index === 0}/><div className="photo-shade"/></>
+        )}
+        <span className="edition">{String(index + 1).padStart(2,"0")}</span>
+      </div>
+    </div>
+  );
+}
+
+function StoryCard({ story, index, saved, onSave }: { story: Story; index: number; saved: boolean; onSave: () => void }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const cardFormats: Format[] = ["cardMarket","cardNews","recentSale","newRecord","watchlistAlert","populationChange","auctionEnding"];
   const isCard = cardFormats.includes(story.format);
-  const [isDwelling, setIsDwelling] = useState(false);
-  useEffect(() => {
-    if (!isActive) {
-      setIsDwelling(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setIsDwelling(true), 950);
-    return () => window.clearTimeout(timer);
-  }, [isActive]);
-  const glanceValue = story.stat ?? story.article?.source ?? "Market update";
-  const glanceLabel = story.statLabel ?? (story.article ? `${story.article.published} · ${story.article.readTime}` : story.subtitle);
-  const primaryLabel = story.action ?? (story.article ? "Read story" : "View details");
+  const primaryValue = story.change ?? story.stat ?? (story.article ? "NEW" : "LIVE");
+  const primaryLabel = story.statLabel ?? story.subtitle;
+  const onTouchStart = (event: React.TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    touchStart.current = { x: touch.clientX, y: touch.clientY };
+  };
+  const onTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
+    const startPoint = touchStart.current;
+    if (!startPoint) return;
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - startPoint.x;
+    const deltaY = touch.clientY - startPoint.y;
+    touchStart.current = null;
+    if (Math.abs(deltaX) < 55 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    if (deltaX > 0) setDetailsOpen(true);
+    if (deltaX < 0) setDetailsOpen(false);
+  };
   return (
-    <article className={`story format-${story.format} ${isCard ? "card-subject" : "player-subject"} ${isDwelling ? "is-dwelling" : "is-glancing"} ${isActive ? "is-active" : ""}`} style={{ "--accent": story.accent } as React.CSSProperties}>
-      <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
-      <div className="story-image" aria-hidden="true">
-        <div className={`image-frame ${isCard ? "card-render" : ""}`}>
-          {isCard ? (
-            <>
-              <div className="slab-label"><b>PSA</b><span>GEM MT</span><strong>10</strong></div>
-              <div className="card-art">
-                <Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 28vw, 22vw" priority={index === 0}/>
-                <div className="card-foil"/>
-                <div className="card-nameplate"><strong>{story.imageAlt}</strong><span>{story.title}</span></div>
-              </div>
-            </>
-          ) : (
-            <><Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 24vw, 32vw" priority={index === 0}/><div className="photo-shade"/><span className="photo-name">{story.imageAlt}</span></>
-          )}
-          <span className="edition">{String(index + 1).padStart(2,"0")}</span>
-        </div>
-        <span className={`format-pill ${isNews ? "editorial" : "market"}`}>{isNews ? "EDITORIAL" : story.kicker}</span>
-      </div>
-      <section className="story-content">
-        <div className="story-heading">
-          <div className="page-type"><b>{formatIcon(story.format)}</b><div><span>PAGE TYPE</span><strong>{story.kicker}</strong></div></div>
+    <article className={`story swipe-story format-${story.format} ${isCard ? "card-subject" : "player-subject"} ${detailsOpen ? "details-open" : ""}`} style={{ "--accent": story.accent } as React.CSSProperties} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <div className="story-front">
+        <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
+        <section className="front-content">
           <h1>{scanTitle(story)}</h1>
-          <p className="subtitle">{story.subtitle}</p>
+          <div className="page-type"><b>{formatIcon(story.format)}</b><div><span>PAGE TYPE</span><strong>{story.kicker}</strong></div></div>
+          <StoryMedia story={story} index={index} isCard={isCard}/>
+          <div className="grabber">
+            <div><strong>{primaryValue}</strong><span>{primaryLabel}</span></div>
+            <p>{grabberText(story)}</p>
+          </div>
+          <button className="details-cue" onClick={() => setDetailsOpen(true)}><span>Stats & details</span><b>→</b><small>Swipe right</small></button>
+        </section>
+        <div className="front-actions">
+          <button onClick={onSave} className={saved ? "active" : ""}><b>{saved ? "★" : "☆"}</b><span>{saved ? "Saved" : "Watch"}</span></button>
+          <button><b>↗</b><span>Share</span></button>
         </div>
-        <div className="glance-summary">
-          <span>{glanceLabel}</span>
-          <div><strong>{glanceValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
-        </div>
-        <div className="dwell-timer" aria-hidden="true"><i/></div>
-        <div className="dwell-content" aria-label={isDwelling ? "Supporting story information" : "Supporting information appears after a brief pause"}>
-          <p className="dwell-label">WHY IT MATTERS</p>
+      </div>
+      <section className="swipe-detail" aria-hidden={!detailsOpen}>
+        <header className="detail-top">
+          <button onClick={() => setDetailsOpen(false)} aria-label="Return to story">←</button>
+          <div><span>{story.kicker}</span><strong>{scanTitle(story)}</strong></div>
+          <div className="detail-avatar"><Image src={story.image} alt={story.imageAlt} fill sizes="44px"/></div>
+        </header>
+        <div className="detail-scroll">
+          <div className="detail-lead"><span>{story.statLabel ?? "CURRENT SIGNAL"}</span><strong>{story.stat ?? primaryValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
           <StoryContent story={story}/>
+          <div className="detail-why"><span>WHY IT MATTERS</span><p>{story.insight}</p></div>
           <div className="chips">{story.chips.map((chip) => <span key={chip}>{chip}</span>)}</div>
+          <div className="detail-actions"><button onClick={onSave}>{saved ? "★ Saved" : "☆ Watch"}</button><button className="primary">{story.action ?? "View full market"} →</button></div>
         </div>
-        <div className="story-actions">
-          <button onClick={onSave} className={saved ? "active" : ""} aria-label={saved ? "Remove from watchlist" : "Add to watchlist"}><b>{saved ? "★" : "☆"}</b><span>{saved ? "Saved" : "Watch"}</span></button>
-          <button className="primary" onClick={onOpen}><span>{primaryLabel}</span><b>→</b></button>
-          <button aria-label="Share story"><b>↗</b><span>Share</span></button>
-        </div>
+        <button className="swipe-back-cue" onClick={() => setDetailsOpen(false)}>← Swipe left to return</button>
       </section>
-      <div className="swipe-hint"><span>↑</span> Swipe for next pulse</div>
     </article>
   );
 }
@@ -596,7 +636,6 @@ export default function Home() {
   const [saved, setSaved] = useState<number[]>([]);
   const [active, setActive] = useState(0);
   const [orderedStories, setOrderedStories] = useState(defaultStories);
-  const [openStory, setOpenStory] = useState<Story | null>(null);
   const feedRef = useRef<HTMLElement>(null);
   useEffect(() => {
     setOrderedStories(shuffleWithoutAdjacentPlayers(stories));
@@ -609,9 +648,8 @@ export default function Home() {
   return (
     <main className="app-shell">
       <nav className="desktop-nav"><PulseLogo/><div><button className="selected">For You</button><button>Players</button><button>Cards</button><button>News</button></div><button className="profile">JS</button></nav>
-      <section className="feed" ref={feedRef} aria-label="Pulse market feed">{orderedStories.map((story, index) => <StoryCard key={story.title} story={story} index={index} saved={saved.includes(index)} isActive={active === index} onSave={() => setSaved((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index])} onOpen={() => setOpenStory(story)}/>)}</section>
+      <section className="feed" ref={feedRef} aria-label="Pulse market feed">{orderedStories.map((story, index) => <StoryCard key={story.title} story={story} index={index} saved={saved.includes(index)} onSave={() => setSaved((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index])}/>)}</section>
       <div className="progress" aria-label={`Story ${active + 1} of ${orderedStories.length}`}>{orderedStories.map((_, index) => <button key={index} className={active === index ? "active" : ""} onClick={() => feedRef.current?.scrollTo({ top:index * (feedRef.current?.clientHeight ?? 0), behavior:"smooth" })} aria-label={`Go to story ${index + 1}`}/>)}</div>
-      {openStory ? <DetailSheet story={openStory} onClose={() => setOpenStory(null)}/> : null}
       <footer className="mobile-nav"><button className="active"><b>⌁</b><span>Pulse</span></button><button><b>◎</b><span>Compete</span></button><button><b>▣</b><span>Collection</span></button><button><b>◇</b><span>Shop</span></button><button><b>○</b><span>Profile</span></button></footer>
     </main>
   );
