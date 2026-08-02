@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
-type Format = "playerMarket" | "cardMarket" | "playerNews" | "cardNews" | "recentSale" | "biggestGain" | "biggestDecline" | "newRecord" | "collectionChange" | "watchlistAlert" | "populationChange" | "auctionEnding" | "playerMilestone" | "marketComparison" | "collectorsWatching" | "competitionOpportunity" | "sportsTrivia" | "hobbyFact";
+type Format = "playerMarket" | "cardMarket" | "playerNews" | "cardNews" | "recentSale" | "biggestGain" | "biggestDecline" | "newRecord" | "collectionChange" | "watchlistAlert" | "populationChange" | "auctionEnding" | "playerMilestone" | "marketComparison" | "collectorsWatching" | "competitionOpportunity" | "sportsTrivia" | "hobbyFact" | "cardSchool" | "teamMoments";
 type Detail = { label: string; value: string };
 type Sale = { date: string; price: string; venue: string };
 
@@ -27,6 +27,8 @@ type Story = {
   action?: string;
   eyebrow?: string;
   answer?: string;
+  video?: string;
+  photos?: string[];
 };
 
 const stories: Story[] = [
@@ -352,6 +354,12 @@ const stories: Story[] = [
   },
   {
     format:"hobbyFact", kicker:"HOBBY FACT", title:"A PSA 10 does not mean “perfect”", subtitle:"Gem Mint cards can still have tiny manufacturing imperfections.", image:"https://a.espncdn.com/i/headshots/nba/players/full/5104157.png", imageAlt:"Victor Wembanyama", accent:"#a78bfa", stat:"GEM MINT", statLabel:"PSA’s highest standard grade", details:[{label:"Grade",value:"PSA 10"},{label:"Centering",value:"Approx. 55/45"},{label:"Corners",value:"Four sharp"},{label:"Surface",value:"Minor flaw possible"}], insight:"PSA describes a 10 as virtually perfect. A slight printing imperfection may be allowed when the card still meets its other Gem Mint requirements.", chips:["Grading","PSA 10","Collector education"], action:"Learn grading basics"
+  },
+  {
+    format:"cardSchool", kicker:"CARD SCHOOL", title:"Card School", subtitle:"Learn the hobby in about a minute.", image:"/cm-team-building.webp", imageAlt:"Card School lesson", accent:"#1ed760", stat:"01:06", statLabel:"Quick video lesson", video:"/card-school.mp4", details:[{label:"Format",value:"Video lesson"},{label:"Length",value:"1:06"},{label:"Level",value:"All collectors"},{label:"Series",value:"Card School"}], insight:"Short, practical hobby lessons designed to make every collector more confident.", chips:["Card School","Learn","Video"], action:"Watch another lesson"
+  },
+  {
+    format:"teamMoments", kicker:"INSIDE CM", title:"Meet the people behind Card Madness", subtitle:"Building, collecting and growing the hobby together.", image:"/cm-team-building.webp", imageAlt:"The Card Madness team", accent:"#32d46a", stat:"BEHIND THE SCENES", statLabel:"Faces of Card Madness", photos:["/cm-team-reaction.webp","/cm-team-building.webp","/cm-team-show-1.webp","/cm-team-show-2.webp"], details:[{label:"Team",value:"Card Madness"},{label:"Where",value:"In the hobby"},{label:"Mission",value:"Build together"},{label:"Motto",value:"Winning Matters"}], insight:"Card Madness is built by collectors, competitors and friends who believe the hobby should be more connected and more fun.", chips:["CM Team","Behind the scenes","Community"], action:"Meet the team"
   }
 ];
 
@@ -361,7 +369,7 @@ const defaultStories = [
   stories[8], stories[10], stories[12], stories[14], stories[4],
   stories[15], stories[16], stories[17], stories[18], stories[19], stories[20],
   stories[21], stories[22], stories[23], stories[24], stories[25], stories[26],
-  stories[27], stories[28], stories[29], stories[30],
+  stories[27], stories[28], stories[29], stories[30], stories[31], stories[32],
 ];
 
 function shuffleWithoutAdjacentPlayers(items: Story[]) {
@@ -525,7 +533,7 @@ function formatIcon(format: Format) {
     recentSale:"$", biggestGain:"↑", biggestDecline:"↓", newRecord:"★",
     collectionChange:"▣", watchlistAlert:"◎", populationChange:"#",
     auctionEnding:"◷", playerMilestone:"◆", marketComparison:"⇄",
-    collectorsWatching:"◉", competitionOpportunity:"⚡", sportsTrivia:"?", hobbyFact:"!",
+    collectorsWatching:"◉", competitionOpportunity:"⚡", sportsTrivia:"?", hobbyFact:"!", cardSchool:"▶", teamMoments:"CM",
   };
   return icons[format] ?? "•";
 }
@@ -562,7 +570,7 @@ function grabberText(story: Story) {
     marketComparison:"Two superstar markets, one clear leader",
     collectorsWatching:"Collector attention is accelerating quickly",
     competitionOpportunity:"A potential move for your active lineup",
-    sportsTrivia:"Think you know the answer?", hobbyFact:"A collector fact worth remembering",
+    sportsTrivia:"Think you know the answer?", hobbyFact:"A collector fact worth remembering", cardSchool:"One minute. One hobby lesson.", teamMoments:"The people behind Card Madness",
   };
   return grabbers[story.format] ?? story.insight;
 }
@@ -570,6 +578,8 @@ function grabberText(story: Story) {
 function typeStatus(story: Story) {
   if (story.format === "sportsTrivia") return "TEST YOUR KNOWLEDGE";
   if (story.format === "hobbyFact") return "DID YOU KNOW?";
+  if (story.format === "cardSchool") return "WATCH & LEARN";
+  if (story.format === "teamMoments") return "BEHIND THE SCENES";
   if (story.format === "auctionEnding") return "ENDING SOON";
   if (story.format === "newRecord") return "ALL-TIME HIGH";
   if (story.format === "recentSale") return "JUST SOLD";
@@ -592,7 +602,7 @@ function detailLabel(story: Story) {
     populationChange:"POPULATION & PRICE IMPACT", auctionEnding:"AUCTION & VALUATION",
     playerMilestone:"MILESTONE MARKET IMPACT", marketComparison:"COMPARE BOTH MARKETS",
     collectorsWatching:"COLLECTOR SENTIMENT", competitionOpportunity:"VIEW TRADE OPPORTUNITY",
-    sportsTrivia:"REVEAL THE ANSWER", hobbyFact:"DISCOVER THE STORY",
+    sportsTrivia:"REVEAL THE ANSWER", hobbyFact:"DISCOVER THE STORY", cardSchool:"WATCH THE LESSON", teamMoments:"OPEN THE PHOTO STORY",
   };
   return labels[story.format] ?? "EXPLORE DETAILS";
 }
@@ -677,12 +687,49 @@ function FunDetail({ story }: { story: Story }) {
   );
 }
 
+function ExperienceFront({ story, onOpen }: { story: Story; onOpen: () => void }) {
+  if (story.format === "cardSchool") {
+    return (
+      <>
+        <div className="experience-heading"><span>VIDEO LESSON</span><b>{story.stat}</b></div>
+        <h1>{story.title}</h1>
+        <p className="experience-subtitle">{story.subtitle}</p>
+        <div className="school-video-shell">
+          <video src={story.video} controls playsInline preload="metadata" aria-label="Card School video lesson"/>
+          <div className="school-corner">CARD<br/>SCHOOL</div>
+        </div>
+        <div className="experience-footer"><span>PRESS PLAY TO LEARN</span><strong>Short lessons. Smarter collecting.</strong></div>
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="experience-heading"><span>PHOTO STORY</span><b>01 / 04</b></div>
+      <h1>{story.title}</h1>
+      <p className="experience-subtitle">{story.subtitle}</p>
+      <button className="team-collage" onClick={onOpen} aria-label="Open Card Madness team photo story">
+        {story.photos?.map((photo, photoIndex) => <span key={photo} className={`team-photo team-photo-${photoIndex + 1}`}><Image src={photo} alt="" fill sizes="(max-width: 799px) 48vw, 24vw"/></span>)}
+        <span className="team-photo-count">4 PHOTOS <b>→</b></span>
+      </button>
+      <button className="fun-reveal team-reveal" onClick={onOpen}><span>SWIPE RIGHT OR TAP</span><strong>MEET THE CM TEAM</strong><b>→</b></button>
+    </>
+  );
+}
+
+function ExperienceDetail({ story }: { story: Story }) {
+  if (story.format === "cardSchool") {
+    return <div className="experience-detail school-detail"><span>CARD SCHOOL</span><h2>Learn the hobby.<br/>One minute at a time.</h2><p>{story.insight}</p><div className="school-detail-grid"><b>01:06</b><span>QUICK LESSON</span><b>ALL</b><span>SKILL LEVELS</span></div></div>;
+  }
+  return <div className="experience-detail team-detail"><div className="team-detail-grid">{story.photos?.map((photo) => <div key={photo}><Image src={photo} alt="Card Madness team moment" fill sizes="(max-width: 799px) 46vw, 24vw"/></div>)}</div><span>INSIDE CARD MADNESS</span><h2>Built by people who love the hobby.</h2><p>{story.insight}</p></div>;
+}
+
 function StoryCard({ story, index, saved, onSave }: { story: Story; index: number; saved: boolean; onSave: () => void }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const cardFormats: Format[] = ["cardMarket","cardNews","recentSale","newRecord","watchlistAlert","populationChange","auctionEnding","hobbyFact"];
   const isCard = cardFormats.includes(story.format);
   const isTextOnly = story.format === "sportsTrivia" || story.format === "hobbyFact";
+  const isExperience = story.format === "cardSchool" || story.format === "teamMoments";
   const primaryValue = story.stat ?? story.change ?? (story.article ? "NEW" : "LIVE");
   const primaryLabel = story.statLabel ?? story.subtitle;
   const cta = detailLabel(story);
@@ -705,9 +752,9 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
     <article className={`story swipe-story format-${story.format} ${isCard ? "card-subject" : "player-subject"} ${isTextOnly ? "text-only-story" : ""} ${detailsOpen ? "details-open" : ""}`} style={{ "--accent": story.accent } as React.CSSProperties} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="story-front">
         <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
-        <section className={`front-content ${isTextOnly ? "fun-front" : ""}`}>
+        <section className={`front-content ${isTextOnly ? "fun-front" : ""} ${isExperience ? "experience-front" : ""}`}>
           <div className="type-strip"><b>{formatIcon(story.format)}</b><span>{story.kicker}</span><em>{typeStatus(story)}</em></div>
-          {story.format === "sportsTrivia" ? <TriviaFront story={story} onReveal={() => setDetailsOpen(true)}/> : story.format === "hobbyFact" ? <FactFront story={story} index={index} onReveal={() => setDetailsOpen(true)}/> : (
+          {isExperience ? <ExperienceFront story={story} onOpen={() => setDetailsOpen(true)}/> : story.format === "sportsTrivia" ? <TriviaFront story={story} onReveal={() => setDetailsOpen(true)}/> : story.format === "hobbyFact" ? <FactFront story={story} index={index} onReveal={() => setDetailsOpen(true)}/> : (
             <>
               <h1>{scanTitle(story)}</h1>
               <p className="front-subtitle">{story.subtitle}</p>
@@ -729,7 +776,7 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
           {isTextOnly ? <div className="detail-avatar text-detail-icon">{formatIcon(story.format)}</div> : <div className="detail-avatar"><Image src={story.image} alt={story.imageAlt} fill sizes="44px"/></div>}
         </header>
         <div className="detail-scroll">
-          {isTextOnly ? <FunDetail story={story}/> : (
+          {isExperience ? <ExperienceDetail story={story}/> : isTextOnly ? <FunDetail story={story}/> : (
             <>
               <div className="detail-lead"><span>{story.statLabel ?? "CURRENT SIGNAL"}</span><strong>{story.stat ?? primaryValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
               <StoryContent story={story}/>
