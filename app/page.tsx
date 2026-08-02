@@ -520,7 +520,7 @@ function StoryCard({ story, index, saved, isActive, onSave, onOpen }: { story: S
   const glanceLabel = story.statLabel ?? (story.article ? `${story.article.published} · ${story.article.readTime}` : story.subtitle);
   const primaryLabel = story.action ?? (story.article ? "Read story" : "View details");
   return (
-    <article className={`story format-${story.format} ${isCard ? "card-subject" : "player-subject"} ${isDwelling ? "is-dwelling" : "is-glancing"}`} style={{ "--accent": story.accent } as React.CSSProperties}>
+    <article className={`story format-${story.format} ${isCard ? "card-subject" : "player-subject"} ${isDwelling ? "is-dwelling" : "is-glancing"} ${isActive ? "is-active" : ""}`} style={{ "--accent": story.accent } as React.CSSProperties}>
       <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
       <div className="story-image" aria-hidden="true">
         <div className={`image-frame ${isCard ? "card-render" : ""}`}>
