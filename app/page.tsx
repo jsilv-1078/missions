@@ -141,7 +141,7 @@ const stories: Story[] = [
       readTime: "4 min read",
       url: "https://www.dexerto.com/sports/victor-wembanyama-rookie-card-sells-for-record-5-11m-after-hobby-controversy-3368300/",
     },
-  },,
+  },
   {
     format: "playerMarket",
     kicker: "PLAYER MARKET",
