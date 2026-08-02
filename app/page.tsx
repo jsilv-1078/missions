@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
-type Format = "playerMarket" | "cardMarket" | "playerNews" | "cardNews" | "recentSale" | "biggestGain" | "biggestDecline" | "newRecord" | "collectionChange" | "watchlistAlert" | "populationChange" | "auctionEnding" | "playerMilestone" | "marketComparison" | "collectorsWatching" | "competitionOpportunity";
+type Format = "playerMarket" | "cardMarket" | "playerNews" | "cardNews" | "recentSale" | "biggestGain" | "biggestDecline" | "newRecord" | "collectionChange" | "watchlistAlert" | "populationChange" | "auctionEnding" | "playerMilestone" | "marketComparison" | "collectorsWatching" | "competitionOpportunity" | "sportsTrivia" | "hobbyFact";
 type Detail = { label: string; value: string };
 type Sale = { date: string; price: string; venue: string };
 
@@ -26,6 +26,7 @@ type Story = {
   article?: { source: string; published: string; url: string; readTime: string };
   action?: string;
   eyebrow?: string;
+  answer?: string;
 };
 
 const stories: Story[] = [
@@ -339,6 +340,18 @@ const stories: Story[] = [
   },
   {
     format:"competitionOpportunity", kicker:"COMPETITION OPPORTUNITY", title:"McDavid is outperforming your portfolio", subtitle:"Free Entry 115 · 4 days remaining", image:"https://a.espncdn.com/i/headshots/nhl/players/full/3895074.png", imageAlt:"Connor McDavid", accent:"#1e9e38", stat:"+5.5%", statLabel:"McDavid · 30-day market", change:"+3.4% vs your portfolio", details:[{label:"Available cards",value:"14"},{label:"Your cash",value:"$1,240"},{label:"Top card",value:"Young Guns"},{label:"Rank",value:"#18"}], insight:"Adding McDavid would increase hockey exposure from 0% to 12% while targeting the competition’s strongest category.", chips:["For your lineup","4 days left","Hockey"], action:"Open trade window"
+  },
+  {
+    format:"sportsTrivia", kicker:"SPORTS TRIVIA", title:"Who is the NBA’s all-time scoring leader?", subtitle:"Four legends. Only one owns the record.", image:"https://a.espncdn.com/i/headshots/nba/players/full/1966.png", imageAlt:"LeBron James", accent:"#22c55e", stat:"MAKE YOUR PICK", statLabel:"Swipe to reveal the answer", answer:"LeBron James", details:[{label:"A",value:"Kareem Abdul-Jabbar"},{label:"B",value:"LeBron James"},{label:"C",value:"Michael Jordan"},{label:"D",value:"Kobe Bryant"}], insight:"LeBron James passed Kareem Abdul-Jabbar in February 2023 to become the NBA’s career scoring leader.", chips:["Basketball","Trivia","All-time record"], action:"Next question"
+  },
+  {
+    format:"hobbyFact", kicker:"HOBBY FACT", title:"Why are modern cards 2½ × 3½ inches?", subtitle:"The familiar card size has a surprisingly specific origin.", image:"https://a.espncdn.com/i/headshots/mlb/players/full/33192.png", imageAlt:"Aaron Judge", accent:"#f59e0b", stat:"1957", statLabel:"The modern standard arrives", details:[{label:"Width",value:"2½ inches"},{label:"Height",value:"3½ inches"},{label:"Set",value:"1957 Topps"},{label:"Why",value:"Easier handling"}], insight:"Topps adopted the 2½ × 3½-inch format in 1957. The dimensions became the standard size used for most modern sports cards.", chips:["Card history","Topps","Did you know?"], action:"Explore hobby history"
+  },
+  {
+    format:"sportsTrivia", kicker:"SPORTS TRIVIA", title:"Who created MLB’s first 50–50 season?", subtitle:"Fifty home runs and fifty stolen bases in one year.", image:"https://a.espncdn.com/i/headshots/mlb/players/full/39832.png", imageAlt:"Shohei Ohtani", accent:"#06b6d4", stat:"MAKE YOUR PICK", statLabel:"Swipe to reveal the answer", answer:"Shohei Ohtani", details:[{label:"A",value:"Ronald Acuña Jr."},{label:"B",value:"Rickey Henderson"},{label:"C",value:"Shohei Ohtani"},{label:"D",value:"Barry Bonds"}], insight:"Shohei Ohtani became the first MLB player with at least 50 home runs and 50 stolen bases in a season in 2024.", chips:["Baseball","Trivia","Historic season"], action:"Next question"
+  },
+  {
+    format:"hobbyFact", kicker:"HOBBY FACT", title:"A PSA 10 does not mean “perfect”", subtitle:"Gem Mint cards can still have tiny manufacturing imperfections.", image:"https://a.espncdn.com/i/headshots/nba/players/full/5104157.png", imageAlt:"Victor Wembanyama", accent:"#a78bfa", stat:"GEM MINT", statLabel:"PSA’s highest standard grade", details:[{label:"Grade",value:"PSA 10"},{label:"Centering",value:"Approx. 55/45"},{label:"Corners",value:"Four sharp"},{label:"Surface",value:"Minor flaw possible"}], insight:"PSA describes a 10 as virtually perfect. A slight printing imperfection may be allowed when the card still meets its other Gem Mint requirements.", chips:["Grading","PSA 10","Collector education"], action:"Learn grading basics"
   }
 ];
 
@@ -348,6 +361,7 @@ const defaultStories = [
   stories[8], stories[10], stories[12], stories[14], stories[4],
   stories[15], stories[16], stories[17], stories[18], stories[19], stories[20],
   stories[21], stories[22], stories[23], stories[24], stories[25], stories[26],
+  stories[27], stories[28], stories[29], stories[30],
 ];
 
 function shuffleWithoutAdjacentPlayers(items: Story[]) {
@@ -509,7 +523,7 @@ function formatIcon(format: Format) {
     recentSale:"$", biggestGain:"↑", biggestDecline:"↓", newRecord:"★",
     collectionChange:"▣", watchlistAlert:"◎", populationChange:"#",
     auctionEnding:"◷", playerMilestone:"◆", marketComparison:"⇄",
-    collectorsWatching:"◉", competitionOpportunity:"⚡",
+    collectorsWatching:"◉", competitionOpportunity:"⚡", sportsTrivia:"?", hobbyFact:"!",
   };
   return icons[format] ?? "•";
 }
@@ -546,8 +560,39 @@ function grabberText(story: Story) {
     marketComparison:"Two superstar markets, one clear leader",
     collectorsWatching:"Collector attention is accelerating quickly",
     competitionOpportunity:"A potential move for your active lineup",
+    sportsTrivia:"Think you know the answer?", hobbyFact:"A collector fact worth remembering",
   };
   return grabbers[story.format] ?? story.insight;
+}
+
+function typeStatus(story: Story) {
+  if (story.format === "sportsTrivia") return "TEST YOUR KNOWLEDGE";
+  if (story.format === "hobbyFact") return "DID YOU KNOW?";
+  if (story.format === "auctionEnding") return "ENDING SOON";
+  if (story.format === "newRecord") return "ALL-TIME HIGH";
+  if (story.format === "recentSale") return "JUST SOLD";
+  if (story.format === "collectionChange") return "PERSONAL UPDATE";
+  if (story.format === "watchlistAlert") return "TARGET HIT";
+  if (story.format === "playerNews" || story.format === "cardNews") return "NEW STORY";
+  if (story.format === "biggestGain") return "UP TODAY";
+  if (story.format === "biggestDecline") return "DOWN TODAY";
+  if (story.change) return `${story.change} · 30D`;
+  return "NEW PULSE";
+}
+
+function detailLabel(story: Story) {
+  const labels: Partial<Record<Format, string>> = {
+    playerMarket:"PLAYER MARKET BREAKDOWN", cardMarket:"PRICE HISTORY & RECENT SALES",
+    playerNews:"STORY & MARKET IMPACT", cardNews:"SALE REPORT & MARKET IMPACT",
+    recentSale:"SALE DETAILS & COMPS", biggestGain:"SEE WHAT’S DRIVING IT",
+    biggestDecline:"REVIEW MARKET RISK", newRecord:"RECORD SALE DETAILS",
+    collectionChange:"SEE WHAT CHANGED", watchlistAlert:"REVIEW THE OPPORTUNITY",
+    populationChange:"POPULATION & PRICE IMPACT", auctionEnding:"AUCTION & VALUATION",
+    playerMilestone:"MILESTONE MARKET IMPACT", marketComparison:"COMPARE BOTH MARKETS",
+    collectorsWatching:"COLLECTOR SENTIMENT", competitionOpportunity:"VIEW TRADE OPPORTUNITY",
+    sportsTrivia:"REVEAL THE ANSWER", hobbyFact:"DISCOVER THE STORY",
+  };
+  return labels[story.format] ?? "EXPLORE DETAILS";
 }
 
 function StoryMedia({ story, index, isCard }: { story: Story; index: number; isCard: boolean }) {
@@ -575,10 +620,11 @@ function StoryMedia({ story, index, isCard }: { story: Story; index: number; isC
 function StoryCard({ story, index, saved, onSave }: { story: Story; index: number; saved: boolean; onSave: () => void }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const cardFormats: Format[] = ["cardMarket","cardNews","recentSale","newRecord","watchlistAlert","populationChange","auctionEnding"];
+  const cardFormats: Format[] = ["cardMarket","cardNews","recentSale","newRecord","watchlistAlert","populationChange","auctionEnding","hobbyFact"];
   const isCard = cardFormats.includes(story.format);
-  const primaryValue = story.change ?? story.stat ?? (story.article ? "NEW" : "LIVE");
+  const primaryValue = story.stat ?? story.change ?? (story.article ? "NEW" : "LIVE");
   const primaryLabel = story.statLabel ?? story.subtitle;
+  const cta = detailLabel(story);
   const onTouchStart = (event: React.TouchEvent<HTMLElement>) => {
     const touch = event.touches[0];
     touchStart.current = { x: touch.clientX, y: touch.clientY };
@@ -599,19 +645,17 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
       <div className="story-front">
         <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
         <section className="front-content">
+          <div className="type-strip"><b>{formatIcon(story.format)}</b><span>{story.kicker}</span><em>{typeStatus(story)}</em></div>
           <h1>{scanTitle(story)}</h1>
-          <div className="page-type"><b>{formatIcon(story.format)}</b><div><span>PAGE TYPE</span><strong>{story.kicker}</strong></div></div>
+          <p className="front-subtitle">{story.subtitle}</p>
           <StoryMedia story={story} index={index} isCard={isCard}/>
           <div className="grabber">
-            <div><strong>{primaryValue}</strong><span>{primaryLabel}</span></div>
+            <div className="signal-value"><strong>{primaryValue}</strong>{story.change && story.stat ? <b>{story.change}</b> : null}</div>
+            <span>{primaryLabel}</span>
             <p>{grabberText(story)}</p>
           </div>
-          <button className="details-cue" onClick={() => setDetailsOpen(true)}><span>Stats & details</span><b>→</b><small>Swipe right</small></button>
+          <button className="details-cue" onClick={() => setDetailsOpen(true)}><span>SWIPE RIGHT OR TAP</span><strong>{cta}</strong><b>→</b></button>
         </section>
-        <div className="front-actions">
-          <button onClick={onSave} className={saved ? "active" : ""}><b>{saved ? "★" : "☆"}</b><span>{saved ? "Saved" : "Watch"}</span></button>
-          <button><b>↗</b><span>Share</span></button>
-        </div>
       </div>
       <section className="swipe-detail" aria-hidden={!detailsOpen}>
         <header className="detail-top">
@@ -620,11 +664,11 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
           <div className="detail-avatar"><Image src={story.image} alt={story.imageAlt} fill sizes="44px"/></div>
         </header>
         <div className="detail-scroll">
-          <div className="detail-lead"><span>{story.statLabel ?? "CURRENT SIGNAL"}</span><strong>{story.stat ?? primaryValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
+          <div className="detail-lead"><span>{story.format === "sportsTrivia" ? "CORRECT ANSWER" : story.statLabel ?? "CURRENT SIGNAL"}</span><strong>{story.answer ?? story.stat ?? primaryValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
           <StoryContent story={story}/>
           <div className="detail-why"><span>WHY IT MATTERS</span><p>{story.insight}</p></div>
           <div className="chips">{story.chips.map((chip) => <span key={chip}>{chip}</span>)}</div>
-          <div className="detail-actions"><button onClick={onSave}>{saved ? "★ Saved" : "☆ Watch"}</button><button className="primary">{story.action ?? "View full market"} →</button></div>
+          <div className="detail-actions"><button onClick={onSave}>{saved ? "★ Saved" : "☆ Watch"}</button><button>↗ Share</button><button className="primary">{story.action ?? "View full market"} →</button></div>
         </div>
         <button className="swipe-back-cue" onClick={() => setDetailsOpen(false)}>← Swipe left to return</button>
       </section>
