@@ -17,6 +17,8 @@ type Story = {
   image: string;
   imageAlt: string;
   chart: number[];
+  details: { label: string; value: string }[];
+  news?: { source: string; url: string; published: string };
 };
 
 const stories: Story[] = [
@@ -35,6 +37,12 @@ const stories: Story[] = [
     image: "https://a.espncdn.com/i/headshots/nba/players/full/5104157.png",
     imageAlt: "Victor Wembanyama",
     chart: [36, 39, 38, 45, 43, 51, 49, 58, 62, 60, 72, 78],
+    details: [
+      { label: "30D sales", value: "$1.34M" },
+      { label: "Cards tracked", value: "1,284" },
+      { label: "Market breadth", value: "84% up" },
+      { label: "Top market", value: "Prizm RCs" },
+    ],
   },
   {
     kicker: "BIGGEST MOVER",
@@ -51,22 +59,39 @@ const stories: Story[] = [
     image: "https://a.espncdn.com/i/headshots/nba/players/full/5104157.png",
     imageAlt: "Victor Wembanyama",
     chart: [30, 33, 32, 36, 34, 42, 40, 47, 52, 56, 69, 82],
+    details: [
+      { label: "Set / Card", value: "2023 Prizm #136" },
+      { label: "Parallel", value: "Silver Prizm" },
+      { label: "Grade", value: "PSA 10" },
+      { label: "30D sales", value: "42 comps" },
+    ],
   },
   {
-    kicker: "MARKET NEWS",
-    title: "The National effect",
-    subtitle: "Basketball rookies heat up after the show",
-    stat: "+7.2%",
-    statLabel: "Rookie index · 7 days",
-    change: "LIVE",
+    kicker: "HOBBY NEWS",
+    title: "Gronk says collecting is at its “super peak”",
+    subtitle: "The former Patriot returns to the hobby at The National",
+    stat: "2026",
+    statLabel: "The National · Chicago",
+    change: "NEW",
     positive: true,
-    accent: "#f59e0b",
-    chips: ["8 min read", "Market-wide", "Updated 12m ago"],
-    insight: "Post-show sales are concentrating around recognizable stars, rare parallels, and low-pop slabs.",
+    accent: "#ef4444",
+    chips: ["New York Post", "5 min read", "July 27, 2026"],
+    insight: "Rob Gronkowski is returning to collecting through an eBay Live series and says sports cards are experiencing a new peak.",
     kind: "news",
-    image: "https://a.espncdn.com/i/headshots/wnba/players/full/4433403.png",
-    imageAlt: "Caitlin Clark",
+    image: "https://a.espncdn.com/i/headshots/nfl/players/full/13229.png",
+    imageAlt: "Rob Gronkowski",
     chart: [42, 41, 44, 46, 45, 50, 53, 52, 56, 59, 61, 65],
+    details: [
+      { label: "Source", value: "New York Post" },
+      { label: "Published", value: "Jul 27, 2026" },
+      { label: "Topic", value: "Hobby growth" },
+      { label: "Event", value: "The National" },
+    ],
+    news: {
+      source: "New York Post",
+      published: "July 27, 2026",
+      url: "https://nypost.com/2026/07/27/lifestyle/patriots-legend-rob-gronkowski-returns-to-childhood-hobby-says-its-at-its-super-peak/",
+    },
   },
   {
     kicker: "PLAYER PULSE",
@@ -83,6 +108,12 @@ const stories: Story[] = [
     image: "https://a.espncdn.com/i/headshots/mlb/players/full/39832.png",
     imageAlt: "Shohei Ohtani",
     chart: [45, 47, 46, 50, 48, 54, 58, 56, 60, 63, 61, 68],
+    details: [
+      { label: "30D sales", value: "$2.08M" },
+      { label: "Cards tracked", value: "2,912" },
+      { label: "Market breadth", value: "67% up" },
+      { label: "Top market", value: "Chrome Autos" },
+    ],
   },
   {
     kicker: "WATCH ALERT",
@@ -99,6 +130,12 @@ const stories: Story[] = [
     image: "https://a.espncdn.com/i/headshots/nfl/players/full/4038941.png",
     imageAlt: "Justin Herbert",
     chart: [76, 73, 75, 69, 71, 64, 66, 59, 61, 55, 49, 46],
+    details: [
+      { label: "Set / Card", value: "2020 Select #344" },
+      { label: "Level", value: "Field Level" },
+      { label: "Grade", value: "PSA 10" },
+      { label: "30D range", value: "$360–$428" },
+    ],
   },
 ];
 
@@ -181,8 +218,22 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
         </div>
 
         <div className="chips">{story.chips.map((chip) => <span key={chip}>{chip}</span>)}</div>
+        <div className="detail-panel">
+          <div className="detail-heading">
+            <span>{story.kind === "player" ? "PLAYER MARKET PROFILE" : story.kind === "news" ? "NEWS DETAILS" : "CARD DETAILS"}</span>
+            <small>{story.kind === "player" ? "30-day snapshot" : story.kind === "news" ? story.news?.published : "Market snapshot"}</small>
+          </div>
+          <div className="detail-grid">
+            {story.details.map((detail) => <div key={detail.label}><span>{detail.label}</span><strong>{detail.value}</strong></div>)}
+          </div>
+          {story.news && (
+            <a className="article-link" href={story.news.url} target="_blank" rel="noreferrer">
+              Read the full article at {story.news.source} <b>↗</b>
+            </a>
+          )}
+        </div>
         <p className="insight">{story.insight}</p>
-        <button className="deep-dive">View full market breakdown <span>→</span></button>
+        <button className="deep-dive">{story.kind === "news" ? "See related market activity" : "View full market breakdown"} <span>→</span></button>
       </section>
 
       <aside className="rail" aria-label="Story actions">
