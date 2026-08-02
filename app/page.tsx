@@ -668,7 +668,7 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
         </header>
         <div className="detail-scroll">
           <div className="detail-lead"><span>{story.format === "sportsTrivia" ? "CORRECT ANSWER" : story.statLabel ?? "CURRENT SIGNAL"}</span><strong>{story.answer ?? story.stat ?? primaryValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
-          <StoryContent story={story}/>
+          {story.format === "sportsTrivia" ? null : <StoryContent story={story}/>}
           <div className="detail-why"><span>WHY IT MATTERS</span><p>{story.insight}</p></div>
           <div className="chips">{story.chips.map((chip) => <span key={chip}>{chip}</span>)}</div>
           <div className="detail-actions"><button onClick={onSave}>{saved ? "★ Saved" : "☆ Watch"}</button><button>↗ Share</button><button className="primary">{story.action ?? "View full market"} →</button></div>
