@@ -315,3 +315,36 @@
   .format-playerNews .story-heading h1,
   .format-cardNews .story-heading h1{font-size:34px}
 }
+
+
+/* Immediate page-type recognition */
+.page-type{display:none}
+@media(max-width:799px){
+  .page-type{display:flex;align-items:center;gap:9px;margin:0 0 10px;min-height:38px}
+  .page-type>b{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:9px;background:var(--accent);color:#fff;font-size:20px;line-height:1;box-shadow:0 0 20px color-mix(in srgb,var(--accent) 30%,transparent)}
+  .page-type>div{display:grid;gap:1px}
+  .page-type span{font-size:6px;line-height:1;color:#77807a;letter-spacing:.18em;font-weight:800}
+  .page-type strong{font-size:17px;line-height:1;text-transform:uppercase;letter-spacing:.035em;color:#fff;white-space:nowrap}
+  .story-image .format-pill{display:none}
+  .story-heading{min-height:144px}
+  .card-subject .story-heading{min-height:158px}
+  .story-heading h1,
+  .format-playerNews .story-heading h1,
+  .format-cardNews .story-heading h1{font-size:36px}
+  .format-biggestGain .page-type>b{background:#22c55e}
+  .format-biggestDecline .page-type>b{background:#ef334e}
+  .format-newRecord .page-type>b,.format-playerMilestone .page-type>b{background:#d69b20;color:#100b02}
+  .format-collectionChange .page-type>b,.format-watchlistAlert .page-type>b{background:#7461e8}
+  .format-auctionEnding .page-type>b{background:#e92d72}
+  .format-playerNews .page-type>b,.format-cardNews .page-type>b{background:#f2eee6;color:#17110d}
+}
+@media(max-height:740px) and (max-width:799px){
+  .page-type{margin-bottom:7px;min-height:34px}
+  .page-type>b{width:33px;height:33px;font-size:18px}
+  .page-type strong{font-size:15px}
+  .story-heading{min-height:130px}
+  .card-subject .story-heading{min-height:146px}
+  .story-heading h1,
+  .format-playerNews .story-heading h1,
+  .format-cardNews .story-heading h1{font-size:33px}
+}
