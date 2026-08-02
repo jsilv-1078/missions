@@ -503,6 +503,17 @@ function DetailSheet({ story, onClose }: { story: Story; onClose: () => void }) 
   );
 }
 
+function formatIcon(format: Format) {
+  const icons: Partial<Record<Format, string>> = {
+    playerMarket:"⌁", cardMarket:"$", playerNews:"N", cardNews:"N",
+    recentSale:"$", biggestGain:"↑", biggestDecline:"↓", newRecord:"★",
+    collectionChange:"▣", watchlistAlert:"◎", populationChange:"#",
+    auctionEnding:"◷", playerMilestone:"◆", marketComparison:"⇄",
+    collectorsWatching:"◉", competitionOpportunity:"⚡",
+  };
+  return icons[format] ?? "•";
+}
+
 function scanTitle(story: Story) {
   if (["playerMarket","biggestGain","biggestDecline","playerMilestone","collectorsWatching","competitionOpportunity"].includes(story.format)) return story.imageAlt;
   if (story.format === "recentSale") return "Ohtani Gold /50";
@@ -556,7 +567,7 @@ function StoryCard({ story, index, saved, isActive, onSave, onOpen }: { story: S
       </div>
       <section className="story-content">
         <div className="story-heading">
-          <p className="kicker"><i/>{story.kicker}</p>
+          <div className="page-type"><b>{formatIcon(story.format)}</b><div><span>PAGE TYPE</span><strong>{story.kicker}</strong></div></div>
           <h1>{scanTitle(story)}</h1>
           <p className="subtitle">{story.subtitle}</p>
         </div>
