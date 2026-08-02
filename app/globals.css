@@ -18,12 +18,14 @@ button { color:inherit; font:inherit; }
 .top-actions button:last-child { color:var(--green); font-size:9px; }
 .hero-visual { min-height:245px; flex:1; max-height:41vh; display:grid; place-items:center; position:relative; padding-top:2px; }
 .visual-core { width:min(52vw,220px); aspect-ratio:.72; border-radius:22px; position:relative; display:grid; place-items:center; transform:perspective(900px) rotateY(-9deg) rotateX(3deg); overflow:hidden; border:1px solid rgba(255,255,255,.28); background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 82%,#fff),#111 48%,color-mix(in srgb,var(--accent) 45%,#000)); box-shadow:-18px 26px 60px rgba(0,0,0,.54),0 0 40px color-mix(in srgb,var(--accent) 25%,transparent); }
-.visual-core:before { content:""; position:absolute; inset:10px; border:1px solid rgba(255,255,255,.22); border-radius:15px; background:radial-gradient(circle at 50% 30%,rgba(255,255,255,.22),transparent 33%),repeating-linear-gradient(135deg,transparent 0 12px,rgba(255,255,255,.04) 13px 14px); }
+.visual-core:before { content:""; position:absolute; inset:10px; z-index:3; border:1px solid rgba(255,255,255,.22); border-radius:15px; pointer-events:none; }
 .visual-core.card { clip-path:polygon(5% 0,95% 0,100% 5%,100% 95%,95% 100%,5% 100%,0 95%,0 5%); }
 .visual-core.news { border-radius:50%; aspect-ratio:1; width:min(52vw,210px); }
 .visual-core.watch { filter:saturate(.65); }
-.monogram { font-size:64px; font-style:italic; font-weight:1000; letter-spacing:-.12em; text-shadow:0 7px 30px rgba(0,0,0,.7); z-index:1; transform:translateX(-4px); }
-.edition { position:absolute; top:22px; right:22px; font-size:11px; font-weight:800; opacity:.65; z-index:1; }
+.player-photo { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center top; z-index:1; filter:saturate(.93) contrast(1.06); }
+.photo-shade { position:absolute; inset:0; z-index:2; background:linear-gradient(180deg,transparent 38%,rgba(3,5,4,.14) 57%,rgba(3,5,4,.92) 100%),linear-gradient(120deg,color-mix(in srgb,var(--accent) 20%,transparent),transparent 45%); }
+.photo-name { position:absolute; left:24px; bottom:20px; z-index:4; font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:900; text-shadow:0 2px 10px #000; }
+.edition { position:absolute; top:22px; right:22px; font-size:11px; font-weight:800; opacity:.8; z-index:4; text-shadow:0 2px 8px #000; }
 .scanline { position:absolute; width:160%; height:1px; background:linear-gradient(90deg,transparent,#fff,transparent); box-shadow:0 0 12px #fff; opacity:.3; transform:rotate(-26deg); animation:scan 4s ease-in-out infinite; }
 @keyframes scan { 0%,100%{top:12%} 50%{top:88%} }
 .market-card { position:absolute; right:16px; bottom:13%; padding:10px 13px; border:1px solid rgba(255,255,255,.14); border-radius:11px; background:rgba(7,10,8,.82); backdrop-filter:blur(12px); box-shadow:0 12px 28px rgba(0,0,0,.35); }
@@ -39,8 +41,17 @@ button { color:inherit; font:inherit; }
 .stat-row>div:first-child { display:flex; flex-direction:column; min-width:126px; }
 .stat-row strong { font-size:25px; letter-spacing:-.04em; }
 .stat-row span { color:var(--muted); font-size:9px; margin-top:2px; }
-.sparkline { height:39px; display:flex; align-items:flex-end; gap:3px; flex:1; }
-.sparkline i { width:5px; min-height:5px; background:var(--accent); border-radius:3px 3px 0 0; }
+.market-chart { height:58px; flex:1; min-width:130px; position:relative; color:#4ee16b; overflow:hidden; }
+.market-chart.negative { color:#ff6565; }
+.market-chart svg { display:block; width:100%; height:100%; overflow:visible; }
+.chart-label { position:absolute; top:0; left:3px; z-index:2; display:flex; gap:6px; align-items:center; font-size:8px; letter-spacing:.12em; color:#69706c; }
+.chart-label b { color:currentColor; font-size:7px; }
+.grid-line { fill:none; stroke:rgba(255,255,255,.075); stroke-width:.7; stroke-dasharray:2 4; }
+.chart-area { color:inherit; }
+.chart-line { fill:none; stroke:currentColor; stroke-width:2.1; stroke-linecap:round; stroke-linejoin:round; filter:drop-shadow(0 0 4px currentColor); }
+.chart-dot { fill:#fff; stroke:currentColor; stroke-width:1.8; }
+.chart-dot-pulse { fill:currentColor; opacity:.18; animation:chartPulse 1.8s ease-out infinite; transform-box:fill-box; transform-origin:center; }
+@keyframes chartPulse { 0%{transform:scale(.65);opacity:.34} 100%{transform:scale(2.1);opacity:0} }
 .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
 .chips span { font-size:9px; border:1px solid rgba(255,255,255,.11); color:#c3c8c5; background:rgba(255,255,255,.04); padding:5px 8px; border-radius:999px; }
 .insight { font-size:12px; line-height:1.5; color:#c4c9c6; max-width:600px; margin:10px 0; }
