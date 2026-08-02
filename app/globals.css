@@ -250,3 +250,48 @@
   .rail{display:none}
   .detail-sheet{border-radius:22px;margin-bottom:20px}
 }
+
+
+/* Attention-based disclosure: glance first, dwell for context */
+.glance-summary{display:none}
+.dwell-timer{display:none}
+.dwell-label{display:none}
+@keyframes dwell-fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes dwell-reveal{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:799px){
+  .story-heading{min-height:101px}
+  .card-subject .story-heading{min-height:126px}
+  .glance-summary{display:grid;gap:3px;margin:3px 0 5px;padding:9px 11px;border-left:3px solid var(--accent);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 14%,transparent),transparent)}
+  .glance-summary>span{font-size:7px;letter-spacing:.12em;text-transform:uppercase;color:#929b95}
+  .glance-summary>div{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+  .glance-summary strong{font-size:38px;line-height:.93;letter-spacing:-.055em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .glance-summary b{font-size:13px;color:var(--accent);padding-bottom:3px;text-align:right}
+  .format-playerNews .glance-summary strong{font-family:Georgia,"Times New Roman",serif;font-size:23px;letter-spacing:-.03em}
+  .dwell-timer{display:block;height:3px;margin:2px 0 8px;overflow:hidden;border-radius:4px;background:#ffffff0d}
+  .dwell-timer i{display:block;width:100%;height:100%;background:var(--accent);transform:scaleX(0);transform-origin:left;box-shadow:0 0 9px var(--accent)}
+  .is-active.is-glancing .dwell-timer i{animation:dwell-fill .95s linear forwards}
+  .is-dwelling .dwell-timer i{transform:scaleX(1)}
+  .dwell-content{min-height:210px;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(7px)}
+  .is-dwelling .dwell-content{visibility:visible;pointer-events:auto;animation:dwell-reveal .28s ease-out forwards}
+  .dwell-label{display:block;margin:0 0 5px;color:var(--accent);font-size:7px;line-height:1;font-weight:900;letter-spacing:.18em}
+  .dwell-content>.format-body{max-height:190px;overflow:hidden}
+  .dwell-content .market-summary,
+  .dwell-content .card-price,
+  .dwell-content .record-sale,
+  .dwell-content .signal-hero{display:none}
+  .dwell-content .player-chart{margin-top:0}
+  .dwell-content .detail-grid{margin-top:0}
+  .dwell-content .insight{margin-top:6px}
+  .dwell-content .chips{display:none}
+  .is-glancing .story-actions .primary span{font-size:0}
+  .is-glancing .story-actions .primary span:after{content:"More details";font-size:9px}
+  .is-dwelling .story-actions .primary{box-shadow:0 0 22px color-mix(in srgb,var(--accent) 30%,transparent)}
+}
+@media(max-height:740px) and (max-width:799px){
+  .story-heading{min-height:92px}
+  .card-subject .story-heading{min-height:116px}
+  .glance-summary strong{font-size:34px}
+  .dwell-content{min-height:170px}
+  .dwell-content>.format-body{max-height:155px}
+}
