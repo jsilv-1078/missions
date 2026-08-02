@@ -304,6 +304,25 @@ const stories: Story[] = [
   }
 ];
 
+const defaultStories = [
+  stories[0], stories[2], stories[3], stories[5], stories[7],
+  stories[9], stories[11], stories[13], stories[1], stories[6],
+  stories[8], stories[10], stories[12], stories[14], stories[4],
+];
+
+function shuffleWithoutAdjacentPlayers(items: Story[]) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const shuffled = [...items];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const randomIndex = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+    }
+    const hasRepeat = shuffled.some((story, index) => index > 0 && story.imageAlt === shuffled[index - 1].imageAlt);
+    if (!hasRepeat) return shuffled;
+  }
+  return defaultStories;
+}
+
 function PulseLogo() {
   return <div className="logo" aria-label="Card Madness Pulse"><span className="logo-mark">CM</span><span>PULSE</span></div>;
 }
@@ -431,8 +450,10 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
 export default function Home() {
   const [saved, setSaved] = useState<number[]>([]);
   const [active, setActive] = useState(0);
+  const [orderedStories, setOrderedStories] = useState(defaultStories);
   const feedRef = useRef<HTMLElement>(null);
   useEffect(() => {
+    setOrderedStories(shuffleWithoutAdjacentPlayers(stories));
     const feed = feedRef.current;
     if (!feed) return;
     const onScroll = () => setActive(Math.round(feed.scrollTop / feed.clientHeight));
@@ -442,8 +463,8 @@ export default function Home() {
   return (
     <main className="app-shell">
       <nav className="desktop-nav"><PulseLogo/><div><button className="selected">For You</button><button>Players</button><button>Cards</button><button>News</button></div><button className="profile">JS</button></nav>
-      <section className="feed" ref={feedRef} aria-label="Pulse market feed">{stories.map((story, index) => <StoryCard key={story.title} story={story} index={index} saved={saved.includes(index)} onSave={() => setSaved((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index])}/>)}</section>
-      <div className="progress" aria-label={`Story ${active + 1} of ${stories.length}`}>{stories.map((_, index) => <button key={index} className={active === index ? "active" : ""} onClick={() => feedRef.current?.scrollTo({ top:index * (feedRef.current?.clientHeight ?? 0), behavior:"smooth" })} aria-label={`Go to story ${index + 1}`}/>)}</div>
+      <section className="feed" ref={feedRef} aria-label="Pulse market feed">{orderedStories.map((story, index) => <StoryCard key={story.title} story={story} index={index} saved={saved.includes(index)} onSave={() => setSaved((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index])}/>)}</section>
+      <div className="progress" aria-label={`Story ${active + 1} of ${orderedStories.length}`}>{orderedStories.map((_, index) => <button key={index} className={active === index ? "active" : ""} onClick={() => feedRef.current?.scrollTo({ top:index * (feedRef.current?.clientHeight ?? 0), behavior:"smooth" })} aria-label={`Go to story ${index + 1}`}/>)}</div>
       <footer className="mobile-nav"><button className="active"><b>⌁</b><span>Pulse</span></button><button><b>◎</b><span>Compete</span></button><button><b>▣</b><span>Collection</span></button><button><b>◇</b><span>Shop</span></button><button><b>○</b><span>Profile</span></button></footer>
     </main>
   );
