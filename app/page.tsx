@@ -624,6 +624,7 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const cardFormats: Format[] = ["cardMarket","cardNews","recentSale","newRecord","watchlistAlert","populationChange","auctionEnding","hobbyFact"];
   const isCard = cardFormats.includes(story.format);
+  const isTextOnly = story.format === "sportsTrivia" || story.format === "hobbyFact";
   const primaryValue = story.stat ?? story.change ?? (story.article ? "NEW" : "LIVE");
   const primaryLabel = story.statLabel ?? story.subtitle;
   const cta = detailLabel(story);
@@ -643,14 +644,14 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
     if (deltaX < 0) setDetailsOpen(false);
   };
   return (
-    <article className={`story swipe-story format-${story.format} ${isCard ? "card-subject" : "player-subject"} ${detailsOpen ? "details-open" : ""}`} style={{ "--accent": story.accent } as React.CSSProperties} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+    <article className={`story swipe-story format-${story.format} ${isCard ? "card-subject" : "player-subject"} ${isTextOnly ? "text-only-story" : ""} ${detailsOpen ? "details-open" : ""}`} style={{ "--accent": story.accent } as React.CSSProperties} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="story-front">
         <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
         <section className="front-content">
           <div className="type-strip"><b>{formatIcon(story.format)}</b><span>{story.kicker}</span><em>{typeStatus(story)}</em></div>
           <h1>{scanTitle(story)}</h1>
           <p className="front-subtitle">{story.subtitle}</p>
-          <StoryMedia story={story} index={index} isCard={isCard}/>
+          {isTextOnly ? null : <StoryMedia story={story} index={index} isCard={isCard}/>}
           <div className="grabber">
             <div className="signal-value"><strong>{primaryValue}</strong>{story.change && story.stat ? <b>{story.change}</b> : null}</div>
             <span>{primaryLabel}</span>
@@ -663,7 +664,7 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
         <header className="detail-top">
           <button onClick={() => setDetailsOpen(false)} aria-label="Return to story">←</button>
           <div><span>{story.kicker}</span><strong>{scanTitle(story)}</strong></div>
-          <div className="detail-avatar"><Image src={story.image} alt={story.imageAlt} fill sizes="44px"/></div>
+          {isTextOnly ? <div className="detail-avatar text-detail-icon">{formatIcon(story.format)}</div> : <div className="detail-avatar"><Image src={story.image} alt={story.imageAlt} fill sizes="44px"/></div>}
         </header>
         <div className="detail-scroll">
           <div className="detail-lead"><span>{story.format === "sportsTrivia" ? "CORRECT ANSWER" : story.statLabel ?? "CURRENT SIGNAL"}</span><strong>{story.answer ?? story.stat ?? primaryValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
