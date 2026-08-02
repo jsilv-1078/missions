@@ -1,5 +1,7 @@
 "use client";
 
+// Pulse media experiences: Card School and Inside CM.
+
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
