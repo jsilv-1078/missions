@@ -3,3 +3,89 @@
 @media(max-height:790px) and (max-width:799px){.story-image{min-height:175px;max-height:28vh}.image-frame{width:min(40vw,155px)}.story-content{padding-bottom:68px}.chips,.insight{display:none}.story h1{font-size:25px}.subtitle{margin-bottom:7px}.player-chart{height:70px}.player-chart svg{height:54px}.detail-grid{padding:6px 7px}.sales-table{margin-top:5px}.sale-row{padding:4px 8px}.record-sale strong{font-size:30px}}
 @media(max-width:430px){.detail-grid{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:6px}.detail-grid>div:nth-child(2){border-right:0}.story-content{padding-right:64px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important}}
+
+/* Phone-first composition: one complete story per 390x844 viewport */
+@media (max-width:799px){
+  .story{min-height:100dvh;height:100dvh}
+  .topbar{height:56px;flex:none;padding:11px 18px}
+  .logo{font-size:13px}.logo-mark{width:30px;height:30px}
+  .top-actions button{width:34px;height:34px}
+  .story-image{flex:none;min-height:0;max-height:none;height:148px;padding:0}
+  .image-frame{width:122px;aspect-ratio:.76;transform:none;border-radius:16px}
+  .format-pill{right:18px;bottom:14px;padding:6px 9px}
+  .story-content{flex:1;min-height:0;padding:0 62px 61px 18px;overflow:hidden}
+  .kicker{font-size:8px;margin-bottom:5px}
+  .story h1{font-size:30px;line-height:.96}
+  .subtitle{font-size:10px;margin:5px 0 8px}
+  .format-body{max-width:none}
+  .chips{display:none}
+  .rail{right:8px;bottom:70px;gap:12px}
+  .rail b{width:38px;height:38px}
+  .swipe-hint{display:none}
+  .detail-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:8px 9px}
+  .detail-grid>div:nth-child(2){border-right:0}
+  .detail-grid span{font-size:7px}
+  .detail-grid strong{font-size:10px}
+  .insight{display:block;font-size:10px;line-height:1.35;margin-top:7px}
+  .mobile-nav{height:59px;padding-bottom:env(safe-area-inset-bottom)}
+  .format-playerMarket .image-frame{width:126px;aspect-ratio:1;border-radius:50%;border:2px solid color-mix(in srgb,var(--accent) 70%,#fff);box-shadow:0 0 40px color-mix(in srgb,var(--accent) 28%,transparent)}
+  .format-playerMarket .photo-name{display:none}
+  .format-playerMarket .edition{top:13px;right:18px}
+  .format-playerMarket .story-image{height:142px}
+  .format-playerMarket .format-pill{bottom:10px;color:#fff;background:color-mix(in srgb,var(--accent) 72%,#071009);border-color:transparent}
+  .format-playerMarket .market-summary{padding:6px 0 7px}
+  .format-playerMarket .market-summary strong{font-size:38px;line-height:.95}
+  .format-playerMarket .market-summary span{font-size:9px;margin-top:3px}
+  .format-playerMarket .market-summary>b{font-size:23px;padding-bottom:3px}
+  .format-playerMarket .player-chart{height:91px;padding-top:16px;margin-top:2px}
+  .format-playerMarket .player-chart svg{height:69px}
+  .format-playerMarket .detail-grid{margin-top:5px;border-color:color-mix(in srgb,var(--accent) 32%,transparent)}
+  .format-cardMarket .story-image{height:136px}
+  .format-cardMarket .image-frame{width:103px;aspect-ratio:.70;border-radius:9px;clip-path:polygon(6% 0,94% 0,100% 5%,100% 95%,94% 100%,6% 100%,0 95%,0 5%);box-shadow:0 14px 38px #000b,0 0 28px color-mix(in srgb,var(--accent) 24%,transparent)}
+  .format-cardMarket .format-pill{border-radius:6px;color:#fff;background:#16782c}
+  .format-cardMarket .card-price{padding:7px 10px}
+  .format-cardMarket .card-price strong{font-size:39px;line-height:1}
+  .format-cardMarket .card-price b{font-size:13px}
+  .format-cardMarket .detail-grid{margin-top:6px}
+  .format-cardMarket .sales-table{margin-top:6px}
+  .format-cardMarket .sales-head{padding:5px 8px;font-size:7px}
+  .format-cardMarket .sale-row{padding:5px 8px;font-size:9px}
+  .format-cardMarket .sale-row strong{font-size:12px}
+  .format-playerNews{background:linear-gradient(180deg,#161210 0,#080807 53%,#050706 100%)}
+  .format-playerNews:after{opacity:.035}
+  .format-playerNews .story-image{height:205px;padding:0 18px}
+  .format-playerNews .image-frame{width:100%;height:181px;aspect-ratio:auto;border-radius:13px;box-shadow:0 18px 45px #000b;transform:none}
+  .format-playerNews .image-frame img{object-position:center 18%}
+  .format-playerNews .photo-name{left:16px;bottom:14px;font-size:8px}
+  .format-playerNews .format-pill{right:27px;bottom:17px;background:#f4eee5;color:#16110d;border:0}
+  .format-playerNews .story-content{padding-top:3px}
+  .format-playerNews h1{font-family:Georgia,"Times New Roman",serif;font-size:29px;line-height:1.01;letter-spacing:-.035em}
+  .format-playerNews .subtitle{display:none}
+  .format-playerNews .news-byline{margin:8px 0 7px;font-size:8px}
+  .format-playerNews .news-dek{font-size:13px;line-height:1.4;margin-bottom:9px}
+  .format-playerNews .detail-grid{display:none}
+  .format-playerNews .article-button{margin-top:8px;padding:11px 12px;font-size:11px;background:#f4eee5;color:#16110d}
+  .format-cardNews{background:radial-gradient(circle at 50% 18%,#6c470f3d,transparent 32%),linear-gradient(165deg,#15110a,#060706 63%)}
+  .format-cardNews .story-image{height:137px}
+  .format-cardNews .image-frame{width:102px;aspect-ratio:.70;border-radius:8px;clip-path:polygon(5% 0,95% 0,100% 5%,100% 95%,95% 100%,5% 100%,0 95%,0 5%);border-color:#f3c45f80;box-shadow:0 15px 42px #000c,0 0 32px #f59e0b32}
+  .format-cardNews .format-pill{border-radius:5px;background:#f59e0b;color:#171006;border:0}
+  .format-cardNews h1{font-size:27px}
+  .format-cardNews .record-sale{padding:8px 11px}
+  .format-cardNews .record-sale strong{font-size:43px;margin:3px 0}
+  .format-cardNews .record-sale span{font-size:8px}
+  .format-cardNews .card-news-specs .detail-grid{margin:6px 0}
+  .format-cardNews .news-dek{font-size:12px;line-height:1.35;margin-bottom:7px}
+  .format-cardNews .source-row{padding-top:6px}
+  .format-cardNews .source-row a{padding:8px 9px;font-size:9px}
+}
+@media (max-width:370px){
+  .story-image{height:130px}
+  .format-playerMarket .story-image{height:128px}
+  .format-playerNews .story-image{height:185px}
+  .format-playerNews .image-frame{height:162px}
+  .story h1{font-size:27px}
+  .format-playerNews h1{font-size:26px}
+  .format-playerMarket .market-summary strong{font-size:34px}
+  .format-playerMarket .player-chart{height:80px}
+  .format-cardNews .record-sale strong{font-size:38px}
+}
