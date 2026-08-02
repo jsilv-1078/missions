@@ -619,6 +619,64 @@ function StoryMedia({ story, index, isCard }: { story: Story; index: number; isC
   );
 }
 
+function TriviaFront({ story, onReveal }: { story: Story; onReveal: () => void }) {
+  return (
+    <>
+      <div className="fun-label"><span>QUICK PLAY</span><b>?</b></div>
+      <h1>{story.title}</h1>
+      <p className="fun-intro">{story.subtitle}</p>
+      <div className="trivia-choices" aria-label="Answer choices">
+        {story.details.map((choice) => (
+          <button key={choice.label} onClick={onReveal}>
+            <b>{choice.label}</b><span>{choice.value}</span>
+          </button>
+        ))}
+      </div>
+      <button className="fun-reveal trivia-reveal" onClick={onReveal}>
+        <span>CHOOSE OR SWIPE RIGHT</span><strong>REVEAL THE ANSWER</strong><b>→</b>
+      </button>
+    </>
+  );
+}
+
+function FactFront({ story, index, onReveal }: { story: Story; index: number; onReveal: () => void }) {
+  return (
+    <>
+      <div className="fact-edition"><span>COLLECTOR KNOWLEDGE</span><b>FACT {String(index + 1).padStart(2,"0")}</b></div>
+      <div className="fact-mark" aria-hidden="true">!</div>
+      <p className="fact-overline">DID YOU KNOW?</p>
+      <h1>{story.title}</h1>
+      <p className="fun-intro">{story.subtitle}</p>
+      <div className="fact-highlight"><span>{story.statLabel}</span><strong>{story.stat}</strong></div>
+      <button className="fun-reveal fact-reveal" onClick={onReveal}>
+        <span>SWIPE RIGHT OR TAP</span><strong>DISCOVER THE STORY</strong><b>→</b>
+      </button>
+    </>
+  );
+}
+
+function FunDetail({ story }: { story: Story }) {
+  if (story.format === "sportsTrivia") {
+    return (
+      <div className="fun-detail trivia-answer">
+        <div className="answer-orbit"><span>ANSWER</span><b>✓</b></div>
+        <p className="answer-label">CORRECT ANSWER</p>
+        <h2>{story.answer}</h2>
+        <div className="answer-explainer"><span>THE STORY</span><p>{story.insight}</p></div>
+      </div>
+    );
+  }
+  return (
+    <div className="fun-detail fact-detail">
+      <div className="fact-detail-top"><span>THE BIG FACT</span><b>!</b></div>
+      <h2>{story.stat}</h2>
+      <p className="fact-detail-label">{story.statLabel}</p>
+      <div className="fact-detail-grid">{story.details.map((detail) => <div key={detail.label}><span>{detail.label}</span><strong>{detail.value}</strong></div>)}</div>
+      <div className="answer-explainer"><span>WHY COLLECTORS CARE</span><p>{story.insight}</p></div>
+    </div>
+  );
+}
+
 function StoryCard({ story, index, saved, onSave }: { story: Story; index: number; saved: boolean; onSave: () => void }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -647,17 +705,21 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
     <article className={`story swipe-story format-${story.format} ${isCard ? "card-subject" : "player-subject"} ${isTextOnly ? "text-only-story" : ""} ${detailsOpen ? "details-open" : ""}`} style={{ "--accent": story.accent } as React.CSSProperties} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="story-front">
         <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
-        <section className="front-content">
+        <section className={`front-content ${isTextOnly ? "fun-front" : ""}`}>
           <div className="type-strip"><b>{formatIcon(story.format)}</b><span>{story.kicker}</span><em>{typeStatus(story)}</em></div>
-          <h1>{scanTitle(story)}</h1>
-          <p className="front-subtitle">{story.subtitle}</p>
-          {isTextOnly ? null : <StoryMedia story={story} index={index} isCard={isCard}/>}
-          <div className="grabber">
-            <div className="signal-value"><strong>{primaryValue}</strong>{story.change && story.stat ? <b>{story.change}</b> : null}</div>
-            <span>{primaryLabel}</span>
-            <p>{grabberText(story)}</p>
-          </div>
-          <button className="details-cue" onClick={() => setDetailsOpen(true)}><span>SWIPE RIGHT OR TAP</span><strong>{cta}</strong><b>→</b></button>
+          {story.format === "sportsTrivia" ? <TriviaFront story={story} onReveal={() => setDetailsOpen(true)}/> : story.format === "hobbyFact" ? <FactFront story={story} index={index} onReveal={() => setDetailsOpen(true)}/> : (
+            <>
+              <h1>{scanTitle(story)}</h1>
+              <p className="front-subtitle">{story.subtitle}</p>
+              <StoryMedia story={story} index={index} isCard={isCard}/>
+              <div className="grabber">
+                <div className="signal-value"><strong>{primaryValue}</strong>{story.change && story.stat ? <b>{story.change}</b> : null}</div>
+                <span>{primaryLabel}</span>
+                <p>{grabberText(story)}</p>
+              </div>
+              <button className="details-cue" onClick={() => setDetailsOpen(true)}><span>SWIPE RIGHT OR TAP</span><strong>{cta}</strong><b>→</b></button>
+            </>
+          )}
         </section>
       </div>
       <section className="swipe-detail" aria-hidden={!detailsOpen}>
@@ -667,9 +729,13 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
           {isTextOnly ? <div className="detail-avatar text-detail-icon">{formatIcon(story.format)}</div> : <div className="detail-avatar"><Image src={story.image} alt={story.imageAlt} fill sizes="44px"/></div>}
         </header>
         <div className="detail-scroll">
-          <div className="detail-lead"><span>{story.format === "sportsTrivia" ? "CORRECT ANSWER" : story.statLabel ?? "CURRENT SIGNAL"}</span><strong>{story.answer ?? story.stat ?? primaryValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
-          {story.format === "sportsTrivia" ? null : <StoryContent story={story}/>}
-          <div className="detail-why"><span>WHY IT MATTERS</span><p>{story.insight}</p></div>
+          {isTextOnly ? <FunDetail story={story}/> : (
+            <>
+              <div className="detail-lead"><span>{story.statLabel ?? "CURRENT SIGNAL"}</span><strong>{story.stat ?? primaryValue}</strong>{story.change ? <b>{story.change}</b> : null}</div>
+              <StoryContent story={story}/>
+              <div className="detail-why"><span>WHY IT MATTERS</span><p>{story.insight}</p></div>
+            </>
+          )}
           <div className="chips">{story.chips.map((chip) => <span key={chip}>{chip}</span>)}</div>
           <div className="detail-actions"><button onClick={onSave}>{saved ? "★ Saved" : "☆ Watch"}</button><button>↗ Share</button><button className="primary">{story.action ?? "View full market"} →</button></div>
         </div>
