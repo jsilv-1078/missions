@@ -503,6 +503,20 @@ function DetailSheet({ story, onClose }: { story: Story; onClose: () => void }) 
   );
 }
 
+function scanTitle(story: Story) {
+  if (["playerMarket","biggestGain","biggestDecline","playerMilestone","collectorsWatching","competitionOpportunity"].includes(story.format)) return story.imageAlt;
+  if (story.format === "recentSale") return "Ohtani Gold /50";
+  if (story.format === "newRecord") return "Jordan Fleer Rookie";
+  if (story.format === "collectionChange") return "Your Collection";
+  if (story.format === "watchlistAlert") return "Mahomes Silver RC";
+  if (story.format === "populationChange") return "Wemby Prizm Base";
+  if (story.format === "auctionEnding") return "LeBron Chrome RC";
+  if (story.format === "marketComparison") return "Ohtani vs. Judge";
+  if (story.format === "playerNews") return story.imageAlt;
+  if (story.format === "cardNews") return "Wemby Prizm Black 1/1";
+  return story.title;
+}
+
 function StoryCard({ story, index, saved, isActive, onSave, onOpen }: { story: Story; index: number; saved: boolean; isActive: boolean; onSave: () => void; onOpen: () => void }) {
   const isNews = story.format === "playerNews" || story.format === "cardNews";
   const cardFormats: Format[] = ["cardMarket","cardNews","recentSale","newRecord","watchlistAlert","populationChange","auctionEnding"];
@@ -543,7 +557,7 @@ function StoryCard({ story, index, saved, isActive, onSave, onOpen }: { story: S
       <section className="story-content">
         <div className="story-heading">
           <p className="kicker"><i/>{story.kicker}</p>
-          <h1>{story.title}</h1>
+          <h1>{scanTitle(story)}</h1>
           <p className="subtitle">{story.subtitle}</p>
         </div>
         <div className="glance-summary">
