@@ -572,3 +572,32 @@
   .details-cue>span{font-size:12px}
   .details-cue>strong{font-size:16px}
 }
+
+
+/* Text-first fun formats: no card/player hero */
+.text-detail-icon{display:grid;place-items:center;background:var(--accent);color:#fff;font-size:22px;font-weight:950}
+@media(max-width:799px){
+  .text-only-story .front-content{padding-top:12px}
+  .text-only-story .front-content>h1{font-size:clamp(42px,12vw,52px);line-height:.94;-webkit-line-clamp:4;margin-top:14px;text-wrap:balance}
+  .text-only-story .front-subtitle{font-size:18px;line-height:1.35;white-space:normal;overflow:visible;text-overflow:clip;margin-top:14px;max-width:34ch}
+  .text-only-story .grabber{margin-top:28px;padding:20px 18px;min-height:128px;display:flex;flex-direction:column;justify-content:center;border-left-width:6px}
+  .text-only-story .signal-value strong{font-size:34px}
+  .text-only-story .grabber>span{font-size:14px;margin-top:8px}
+  .text-only-story .grabber p{font-size:20px;line-height:1.2;margin-top:10px}
+  .text-only-story .details-cue{margin-top:auto;min-height:78px}
+  .text-only-story .details-cue>strong{font-size:18px}
+}
+@media(max-height:740px) and (max-width:799px){
+  .text-only-story .front-content>h1{font-size:38px;margin-top:8px}
+  .text-only-story .front-subtitle{font-size:16px;margin-top:8px}
+  .text-only-story .grabber{margin-top:14px;min-height:105px;padding:14px}
+  .text-only-story .grabber p{font-size:18px}
+  .text-only-story .details-cue{min-height:68px}
+}
+@media(min-width:800px){
+  .text-only-story .front-content{width:min(70%,760px);padding-top:14vh}
+  .text-only-story .front-content>h1{font-size:clamp(56px,6vw,82px);max-width:760px;margin-top:26px}
+  .text-only-story .front-subtitle{font-size:20px;max-width:620px}
+  .text-only-story .grabber{position:static;max-width:620px;margin-top:40px;padding:22px}
+  .text-only-story .details-cue{width:460px}
+}
