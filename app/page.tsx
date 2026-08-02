@@ -458,7 +458,6 @@ function SignalStory({ story }: { story: Story }) {
       {story.format === "marketComparison" ? <div className="versus"><b>OHTANI</b><span>VS</span><b>JUDGE</b></div> : null}
       <DetailGrid details={story.details}/>
       <p className="insight">{story.insight}</p>
-      <button className="signal-action">{story.action} <span>→</span></button>
     </div>
   );
 }
@@ -471,12 +470,46 @@ function StoryContent({ story }: { story: Story }) {
   return <SignalStory story={story}/>;
 }
 
-function StoryCard({ story, index, saved, onSave }: { story: Story; index: number; saved: boolean; onSave: () => void }) {
+function sheetTitle(format: Format) {
+  if (["playerMarket","biggestGain","biggestDecline","marketComparison"].includes(format)) return "Market intelligence";
+  if (["cardMarket","recentSale","newRecord","auctionEnding"].includes(format)) return "Card & transaction details";
+  if (["collectionChange","watchlistAlert","competitionOpportunity"].includes(format)) return "Personalized for you";
+  if (["playerNews","cardNews","playerMilestone"].includes(format)) return "Story context";
+  return "Supply & collector signals";
+}
+
+function DetailSheet({ story, onClose }: { story: Story; onClose: () => void }) {
+  const primaryLabel = story.action ?? (story.article ? "Read full article" : "View full market");
+  return (
+    <div className="sheet-backdrop" role="presentation" onClick={onClose}>
+      <section className={`detail-sheet sheet-${story.format}`} role="dialog" aria-modal="true" aria-label={`${story.title} details`} onClick={(event) => event.stopPropagation()}>
+        <button className="sheet-close" onClick={onClose} aria-label="Close details">×</button>
+        <div className="sheet-handle"/>
+        <p className="sheet-kicker">{sheetTitle(story.format)}</p>
+        <div className="sheet-heading">
+          <div className="sheet-avatar"><Image src={story.image} alt={story.imageAlt} fill sizes="64px"/></div>
+          <div><span>{story.kicker}</span><h2>{story.title}</h2><p>{story.subtitle}</p></div>
+        </div>
+        {story.stat ? <div className="sheet-stat"><div><span>{story.statLabel}</span><strong>{story.stat}</strong></div>{story.change ? <b>{story.change}</b> : null}</div> : null}
+        <DetailGrid details={story.details}/>
+        <div className="sheet-analysis"><span>WHY IT MATTERS</span><p>{story.insight}</p></div>
+        <div className="sheet-meta">
+          <div><span>Data confidence</span><strong>{story.format === "playerNews" ? "Published source" : "High"}</strong></div>
+          <div><span>Updated</span><strong>{story.format === "auctionEnding" ? "Live" : "Just now"}</strong></div>
+        </div>
+        {story.article ? <a className="sheet-primary" href={story.article.url} target="_blank" rel="noreferrer">{primaryLabel} <span>↗</span></a> : <button className="sheet-primary">{primaryLabel} <span>→</span></button>}
+      </section>
+    </div>
+  );
+}
+
+function StoryCard({ story, index, saved, onSave, onOpen }: { story: Story; index: number; saved: boolean; onSave: () => void; onOpen: () => void }) {
   const isNews = story.format === "playerNews" || story.format === "cardNews";
   const cardFormats: Format[] = ["cardMarket","cardNews","recentSale","newRecord","watchlistAlert","populationChange","auctionEnding"];
   const isCard = cardFormats.includes(story.format);
+  const primaryLabel = story.action ?? (story.article ? "Read story" : "View details");
   return (
-    <article className={`story format-${story.format}`} style={{ "--accent": story.accent } as React.CSSProperties}>
+    <article className={`story format-${story.format} ${isCard ? "card-subject" : "player-subject"}`} style={{ "--accent": story.accent } as React.CSSProperties}>
       <header className="topbar"><PulseLogo/><div className="top-actions"><button aria-label="Search">⌕</button><button aria-label="Notifications">●</button></div></header>
       <div className="story-image" aria-hidden="true">
         <div className={`image-frame ${isCard ? "card-render" : ""}`}>
@@ -484,26 +517,32 @@ function StoryCard({ story, index, saved, onSave }: { story: Story; index: numbe
             <>
               <div className="slab-label"><b>PSA</b><span>GEM MT</span><strong>10</strong></div>
               <div className="card-art">
-                <Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 32vw, 22vw" priority={index === 0}/>
+                <Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 28vw, 22vw" priority={index === 0}/>
                 <div className="card-foil"/>
                 <div className="card-nameplate"><strong>{story.imageAlt}</strong><span>{story.title}</span></div>
               </div>
             </>
           ) : (
-            <><Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 60vw, 32vw" priority={index === 0}/><div className="photo-shade"/><span className="photo-name">{story.imageAlt}</span></>
+            <><Image src={story.image} alt={story.imageAlt} fill sizes="(max-width: 799px) 24vw, 32vw" priority={index === 0}/><div className="photo-shade"/><span className="photo-name">{story.imageAlt}</span></>
           )}
-          <span className="edition">0{index + 1}</span>
+          <span className="edition">{String(index + 1).padStart(2,"0")}</span>
         </div>
         <span className={`format-pill ${isNews ? "editorial" : "market"}`}>{isNews ? "EDITORIAL" : story.kicker}</span>
       </div>
       <section className="story-content">
-        <p className="kicker"><i/>{story.kicker}</p>
-        <h1>{story.title}</h1>
-        <p className="subtitle">{story.subtitle}</p>
+        <div className="story-heading">
+          <p className="kicker"><i/>{story.kicker}</p>
+          <h1>{story.title}</h1>
+          <p className="subtitle">{story.subtitle}</p>
+        </div>
         <StoryContent story={story}/>
         <div className="chips">{story.chips.map((chip) => <span key={chip}>{chip}</span>)}</div>
+        <div className="story-actions">
+          <button onClick={onSave} className={saved ? "active" : ""} aria-label={saved ? "Remove from watchlist" : "Add to watchlist"}><b>{saved ? "★" : "☆"}</b><span>{saved ? "Saved" : "Watch"}</span></button>
+          <button className="primary" onClick={onOpen}><span>{primaryLabel}</span><b>→</b></button>
+          <button aria-label="Share story"><b>↗</b><span>Share</span></button>
+        </div>
       </section>
-      <aside className="rail" aria-label="Story actions"><button onClick={onSave} className={saved ? "active" : ""} aria-label={saved ? "Remove from watchlist" : "Add to watchlist"}><b>{saved ? "★" : "☆"}</b><span>{saved ? "Saved" : "Watch"}</span></button><button aria-label="Share story"><b>↗</b><span>Share</span></button></aside>
       <div className="swipe-hint"><span>↑</span> Swipe for next pulse</div>
     </article>
   );
@@ -513,6 +552,7 @@ export default function Home() {
   const [saved, setSaved] = useState<number[]>([]);
   const [active, setActive] = useState(0);
   const [orderedStories, setOrderedStories] = useState(defaultStories);
+  const [openStory, setOpenStory] = useState<Story | null>(null);
   const feedRef = useRef<HTMLElement>(null);
   useEffect(() => {
     setOrderedStories(shuffleWithoutAdjacentPlayers(stories));
@@ -525,8 +565,9 @@ export default function Home() {
   return (
     <main className="app-shell">
       <nav className="desktop-nav"><PulseLogo/><div><button className="selected">For You</button><button>Players</button><button>Cards</button><button>News</button></div><button className="profile">JS</button></nav>
-      <section className="feed" ref={feedRef} aria-label="Pulse market feed">{orderedStories.map((story, index) => <StoryCard key={story.title} story={story} index={index} saved={saved.includes(index)} onSave={() => setSaved((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index])}/>)}</section>
+      <section className="feed" ref={feedRef} aria-label="Pulse market feed">{orderedStories.map((story, index) => <StoryCard key={story.title} story={story} index={index} saved={saved.includes(index)} onSave={() => setSaved((current) => current.includes(index) ? current.filter((item) => item !== index) : [...current, index])} onOpen={() => setOpenStory(story)}/>)}</section>
       <div className="progress" aria-label={`Story ${active + 1} of ${orderedStories.length}`}>{orderedStories.map((_, index) => <button key={index} className={active === index ? "active" : ""} onClick={() => feedRef.current?.scrollTo({ top:index * (feedRef.current?.clientHeight ?? 0), behavior:"smooth" })} aria-label={`Go to story ${index + 1}`}/>)}</div>
+      {openStory ? <DetailSheet story={openStory} onClose={() => setOpenStory(null)}/> : null}
       <footer className="mobile-nav"><button className="active"><b>⌁</b><span>Pulse</span></button><button><b>◎</b><span>Compete</span></button><button><b>▣</b><span>Collection</span></button><button><b>◇</b><span>Shop</span></button><button><b>○</b><span>Profile</span></button></footer>
     </main>
   );
