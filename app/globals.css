@@ -89,3 +89,24 @@
   .format-playerMarket .player-chart{height:80px}
   .format-cardNews .record-sale strong{font-size:38px}
 }
+
+/* Card-data stories render a complete graded-card facsimile, not a player portrait */
+.card-render{background:linear-gradient(145deg,#f6f8f7,#b9c0bc);border:2px solid #e9edeb;padding:4px;display:flex;flex-direction:column;gap:3px;box-shadow:0 18px 55px #000c,0 0 34px color-mix(in srgb,var(--accent) 26%,transparent)}
+.card-render .edition{z-index:8;top:auto;right:8px;bottom:7px;color:#fff;font-size:7px;opacity:.7}
+.slab-label{height:25px;flex:none;border:1px solid #aeb6b1;border-radius:3px;background:#f8faf9;color:#171a18;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:5px;padding:2px 5px;text-shadow:none}
+.slab-label b{color:#e1182c;font-size:10px;letter-spacing:-.04em}
+.slab-label span{font-size:6px;letter-spacing:.12em;color:#4e5651}
+.slab-label strong{font-size:14px;line-height:1}
+.card-art{position:relative;flex:1;min-height:0;overflow:hidden;border:2px solid color-mix(in srgb,var(--accent) 65%,#fff);background:#121512}
+.card-art img{object-fit:cover!important;object-position:center top!important;filter:saturate(.92) contrast(1.08)}
+.card-foil{position:absolute;inset:0;background:linear-gradient(120deg,#ffffff40 0 10%,transparent 24% 55%,#ffffff2b 66%,transparent 78%),repeating-linear-gradient(135deg,transparent 0 15px,#ffffff12 16px 17px);mix-blend-mode:screen}
+.card-nameplate{position:absolute;left:5px;right:5px;bottom:5px;padding:5px 6px;background:#070908df;border-top:1px solid color-mix(in srgb,var(--accent) 80%,#fff);display:grid;text-shadow:0 1px 5px #000}
+.card-nameplate strong{font-size:7px;text-transform:uppercase;letter-spacing:.08em;color:#fff}
+.card-nameplate span{font-size:6px;color:#c7cdc9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:799px){
+  .format-cardMarket .image-frame.card-render,.format-cardNews .image-frame.card-render{width:112px;aspect-ratio:.67;clip-path:none;border-radius:6px}
+  .slab-label{height:22px}
+  .slab-label b{font-size:9px}.slab-label strong{font-size:12px}
+  .card-nameplate{left:4px;right:4px;bottom:4px;padding:4px 5px}
+  .card-nameplate strong{font-size:6px}.card-nameplate span{font-size:5px}
+}
