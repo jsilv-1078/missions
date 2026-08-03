@@ -1,6 +1,6 @@
 {
-  "name": "card-madness-pulse",
-  "version": "1.0.0",
+  "name": "card-madness-pulse-mvp",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6"

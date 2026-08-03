@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Card Madness Pulse",
-  description: "A personalized, swipeable feed for the sports card market.",
+  title: "Card Madness Pulse MVP",
+  description: "Market intelligence and curated sports-card news.",
 };
 
 export const viewport: Viewport = {
