@@ -13,7 +13,7 @@ button{color:inherit}
 .story-face,.detail-face{width:50%;height:100%;min-width:0;flex:0 0 50%;position:relative;overflow:hidden}
 .story-face{padding:max(14px,env(safe-area-inset-top)) 18px calc(78px + env(safe-area-inset-bottom));display:flex;flex-direction:column;background:radial-gradient(circle at 74% 34%,#15492342,transparent 35%),linear-gradient(160deg,#0b120d,#050706 72%)}
 .story-face>header{height:48px;display:flex;align-items:center;justify-content:space-between;flex:none}
-.pulse-logo{display:flex;align-items:center;gap:9px}.pulse-logo span{width:35px;height:35px;display:grid;place-items:center;border:2px solid var(--green);color:var(--green);font-size:24px;font-weight:950;transform:skew(-6deg)}.pulse-logo b{font-size:16px;letter-spacing:.23em}
+.pulse-logo{display:flex;align-items:center;gap:10px}.pulse-brand-mark{width:38px;height:47px;object-fit:contain;flex:none}.pulse-logo b{font-size:16px;letter-spacing:.23em}
 .live-pill{padding:7px 10px;border:1px solid #ffffff24;border-radius:999px;color:#aab2ac;font-size:11px;font-weight:900;letter-spacing:.09em}
 .type-banner{min-height:48px;margin:7px 0 11px;display:flex;align-items:center;border:1px solid #ffffff1d;border-radius:13px;background:#0b100dcc;overflow:hidden;flex:none}
 .type-banner>b{width:48px;align-self:stretch;display:grid;place-items:center;background:var(--green);color:#051008;font-size:24px}

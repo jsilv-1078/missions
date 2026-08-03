@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import type { FeedStory, MarketStory, NewsStory } from "@/lib/types";
 
 function PulseLogo() {
-  return <div className="pulse-logo" aria-label="Card Madness Pulse"><span>↗</span><b>PULSE</b></div>;
+  return <div className="pulse-logo" aria-label="Card Madness Pulse"><Image className="pulse-brand-mark" src="/card-madness-symbol.png" alt="" width={40} height={50}/><b>PULSE</b></div>;
 }
 
 function currency(value: number) {
