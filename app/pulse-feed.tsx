@@ -32,7 +32,7 @@ function LineChart({ values, negative }: { values: number[]; negative: boolean }
 function MarketFront({ story, open }: { story: MarketStory; open: () => void }) {
   const negative = story.change30d < 0;
   return <section className="story-face market-face">
-    <header><PulseLogo/><span className="live-pill">{story.demo ? "DEMO DATA" : "LIVE DATA"}</span></header>
+    <header><PulseLogo/><span className="live-pill">LIVE DATA</span></header>
     <div className="type-banner market-banner"><b>$</b><div><span>MARKET DATA</span><strong>{story.storyKind === "volume" ? "HIGH ACTIVITY" : negative ? "PRICE DECLINE" : "PRICE GAIN"}</strong></div></div>
     <h1>{story.headline}</h1>
     <p className="subject-line">{story.cardTitle} · {story.grade}</p>
@@ -122,10 +122,17 @@ function Story({ story }: { story: FeedStory }) {
   </article>;
 }
 
+function EmptyFeed() {
+  return <section className="empty-feed">
+    <PulseLogo/>
+    <div><span>LIVE FEED</span><h1>No verified stories yet.</h1><p>Published news and live Card Hedge market updates will appear here as they become available.</p></div>
+  </section>;
+}
+
 export function PulseFeed({ initialStories }: { initialStories: FeedStory[] }) {
   return <main className="app-shell">
     <nav className="desktop-nav"><PulseLogo/><div><button className="active">For You</button><button>Market</button><button>News</button></div><a href="/admin/news">News Admin</a></nav>
-    <section className="feed" aria-label="Pulse market and news feed">{initialStories.map((story) => <Story key={story.id} story={story}/>)}</section>
+    <section className="feed" aria-label="Pulse market and news feed">{initialStories.length ? initialStories.map((story) => <Story key={story.id} story={story}/>) : <EmptyFeed/>}</section>
     <nav className="mobile-nav"><button className="active"><b>⌁</b><span>Pulse</span></button><button><b>○</b><span>Compete</span></button><button><b>□</b><span>Collection</span></button><button><b>◇</b><span>Shop</span></button><button><b>●</b><span>Profile</span></button></nav>
   </main>;
 }

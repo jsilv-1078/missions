@@ -1,5 +1,4 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
-import { seedMarketStories, seedNewsStories } from "./seed";
 import type { FeedStory, MarketStory, NewArticleInput, NewsStory } from "./types";
 
 type SqlClient = NeonQueryFunction<false, false>;
@@ -65,15 +64,8 @@ async function initializeSchema() {
   ].join(" "));
   await sql.query("CREATE INDEX IF NOT EXISTS market_stories_updated_idx ON market_stories(updated_at DESC)");
   await sql.query("CREATE INDEX IF NOT EXISTS news_stories_published_idx ON news_stories(published_at DESC)");
-
-  const marketCount = await sql.query("SELECT COUNT(*)::int AS count FROM market_stories");
-  if (Number(marketCount[0]?.count ?? 0) === 0) {
-    for (const story of seedMarketStories) await upsertMarketStory(story, false);
-  }
-  const newsCount = await sql.query("SELECT COUNT(*)::int AS count FROM news_stories");
-  if (Number(newsCount[0]?.count ?? 0) === 0) {
-    for (const story of seedNewsStories) await upsertNewsStory(story, false);
-  }
+  await sql.query("DELETE FROM market_stories WHERE demo=TRUE");
+  await sql.query("DELETE FROM news_stories WHERE demo=TRUE");
 }
 
 export async function upsertMarketStory(story: MarketStory, initialize = true) {
@@ -145,7 +137,7 @@ function interleave(markets: MarketStory[], news: NewsStory[]) {
 }
 
 export async function getFeedStories(limit = 30): Promise<FeedStory[]> {
-  if (!databaseConfigured()) return interleave(seedMarketStories, seedNewsStories).slice(0, limit);
+  if (!databaseConfigured()) return [];
   try {
     await ensureSchema();
     const marketLimit = Math.max(1, Math.ceil(limit * 0.7));
@@ -157,7 +149,7 @@ export async function getFeedStories(limit = 30): Promise<FeedStory[]> {
     return interleave(markets.map(marketRow), news.map(newsRow)).slice(0, limit);
   } catch (error) {
     console.error("Pulse database read failed", error);
-    return interleave(seedMarketStories, seedNewsStories).slice(0, limit);
+    return [];
   }
 }
 
