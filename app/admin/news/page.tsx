@@ -8,20 +8,32 @@ export default function NewsAdmin() {
   const [token,setToken] = useState("");
   const [status,setStatus] = useState<Status>({kind:"idle",message:"Enter the admin token to publish a story."});
   const [syncing,setSyncing] = useState(false);
+  const [publishing,setPublishing] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const body = Object.fromEntries(form.entries());
+    setPublishing(true);
     setStatus({kind:"idle",message:"Publishing…"});
-    const response = await fetch("/api/admin/news",{
-      method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer " + token},
-      body:JSON.stringify(body),
-    });
-    const result = await response.json();
-    if (!response.ok) return setStatus({kind:"error",message:result.error ?? "Unable to publish"});
-    event.currentTarget.reset();
-    setStatus({kind:"success",message:"Story published to the Pulse feed."});
+    try {
+      const response = await fetch("/api/admin/news",{
+        method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer " + token},
+        body:JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setStatus({kind:"error",message:result.error ?? "Unable to publish"});
+        return;
+      }
+      formElement.reset();
+      setStatus({kind:"success",message:"Story published to the Pulse feed."});
+    } catch {
+      setStatus({kind:"error",message:"The publish request could not be completed. Please try again."});
+    } finally {
+      setPublishing(false);
+    }
   }
 
   async function sync() {
@@ -45,7 +57,7 @@ export default function NewsAdmin() {
       <div className="two-col"><label>Category<select name="category" defaultValue="Player news"><option>Player news</option><option>Milestone</option><option>Injury</option><option>Transaction</option><option>Card sale</option><option>Hobby</option></select></label><label>Published<input name="publishedAt" type="datetime-local" required/></label></div>
       <label>Player or approved article image URL<input name="imageUrl" type="url" required placeholder="https://…"/></label>
       <label>Related Card Hedge card ID <small>Optional</small><input name="relatedCardId" placeholder="Connect market context later"/></label>
-      <button className="publish-button" disabled={!token}>Publish to Pulse</button>
+      <button className="publish-button" disabled={!token || publishing}>{publishing ? "Publishing…" : "Publish to Pulse"}</button>
       <p className={"form-status " + status.kind}>{status.message}</p>
     </form>
   </main>;
