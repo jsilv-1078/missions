@@ -41,7 +41,7 @@ const TARGET_GRADE_PREMIUM_STORIES = 14;
 const VINTAGE_RESULTS_PER_YEAR = 25;
 const MAX_VINTAGE_CANDIDATES = 16;
 const SEARCH_CONCURRENCY = 6;
-const MAX_PUBLISHED_STORIES = 30;
+const MAX_PUBLISHED_STORIES = 48;
 const ENRICH_CONCURRENCY = 8;
 const MIN_30_DAY_SALES = 5;
 const MIN_VINTAGE_30_DAY_SALES = 3;
@@ -76,7 +76,7 @@ async function cardHedgeFetch<T>(path: string, body?: unknown): Promise<T> {
     signal: AbortSignal.timeout(20000),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error("Card Hedge " + path + " returned " + response.status);
+  if (!response.ok) throw new Error("Market data provider " + path + " returned " + response.status);
   return response.json() as Promise<T>;
 }
 
@@ -340,7 +340,7 @@ async function runDiscoveryRequests(requests: DiscoveryRequest[]) {
       return await cardHedgeFetch<{ cards?:CardSearchItem[] }>(item.path,item.body);
     } catch (error) {
       console.warn(JSON.stringify({
-        level:"warn",message:"Card Hedge candidate search failed",category:item.category,
+        level:"warn",message:"Market candidate search failed",category:item.category,
         storyKind:item.discoveryKind,error:error instanceof Error ? error.message : "Unknown error",
       }));
       return { cards:[] };
@@ -436,8 +436,8 @@ function storyScore(facts: MarketFacts, kind: MarketStoryKind) {
 function summaryFor(facts: MarketFacts, kind: MarketStoryKind) {
   const descriptor = facts.cardTitle + " · " + facts.grade + ". ";
   if (kind === "high_sales_30d") return descriptor + facts.sales30d.toLocaleString() + " recorded sales over the last 30 days.";
-  if (kind === "biggest_gain") return descriptor + "Current Card Hedge FMV is up " + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
-  if (kind === "biggest_loss") return descriptor + "Current Card Hedge FMV is down " + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
+  if (kind === "biggest_gain") return descriptor + "Current estimated value is up " + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
+  if (kind === "biggest_loss") return descriptor + "Current estimated value is down " + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
   if (kind === "vintage_mover") return descriptor + "This " + facts.cardYear + " issue is " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
   if (kind === "recent_sale" && facts.recentSale) return descriptor + "A comparable sale closed today at " + facts.recentSale.price.toLocaleString("en-US",{ style:"currency",currency:"USD" }) + (facts.recentSale.venue ? " via " + facts.recentSale.venue + "." : ".");
   if (kind === "grade_gap") {
@@ -446,7 +446,7 @@ function summaryFor(facts: MarketFacts, kind: MarketStoryKind) {
     return descriptor + ladder + ". " + facts.gradePrices[0].grade + " is priced at " + facts.gradeGapMultiple.toFixed(1) + "× " + low.grade + ".";
   }
   if (kind === "sales_surge") return descriptor + "The last seven days are running at " + facts.salesPaceMultiple.toFixed(1) + "× the daily pace of the preceding 23 days.";
-  return descriptor + "Card Hedge identifies this as a rookie card with " + facts.sales30d.toLocaleString() + " recorded sales over 30 days.";
+  return descriptor + "This rookie card has " + facts.sales30d.toLocaleString() + " recorded sales over 30 days.";
 }
 
 function buildStory(facts: MarketFacts, storyKind: MarketStoryKind):MarketStory {
@@ -530,7 +530,7 @@ async function reportSyncStage(
     await updateSyncProgress(runId,message,seen,written);
   } catch (error) {
     console.warn(JSON.stringify({
-      level:"warn",message:"Unable to persist Card Hedge sync progress",source:"cardhedge",runId,stage,
+      level:"warn",message:"Unable to persist market sync progress",source:"cardhedge",runId,stage,
       error:error instanceof Error ? error.message : "Unknown error",
     }));
   }
@@ -539,11 +539,11 @@ async function reportSyncStage(
 export async function syncMarketData() {
   if (!cardHedgeConfigured()) return { status:"skipped", seen:0, written:0, message:"Waiting for CARDHEDGE_API_KEY" };
   const startedAt = Date.now();
-  const runId = await beginSync("cardhedge","Searching Card Hedge for market candidates…");
+  const runId = await beginSync("cardhedge","Searching for market candidates…");
   let seen = 0;
   let written = 0;
   try {
-    await reportSyncStage(runId,"discovery","Searching Card Hedge for modern cards, grading premiums and verified pre-1980 years…");
+    await reportSyncStage(runId,"discovery","Searching for modern cards, grading premiums and verified pre-1980 years…");
     const discovery = await discoverCandidates();
     const candidates = discovery.candidates;
     seen = candidates.length;
@@ -586,17 +586,17 @@ export async function syncMarketData() {
       return counts;
     },{});
     console.info(JSON.stringify({
-      level:"info",message:"Card Hedge quality review",source:"cardhedge",runId,stage:"complete",
+      level:"info",message:"Market data quality review",source:"cardhedge",runId,stage:"complete",
       durationMs:Date.now() - startedAt,seen:candidates.length,published:stories.length,rejected:rejected.length,
       deleted,reasonCounts,typeCounts,vintageGradeCounts,discovery:discovery.stats,
     }));
-    const message = "Card Hedge sync completed: " + stories.length + " published, " + rejected.length + " rejected, " + deleted + " stale removed";
+    const message = "Market sync completed: " + stories.length + " published, " + rejected.length + " rejected, " + deleted + " stale removed";
     await finishSync(runId,"success",candidates.length,stories.length,message);
     return { status:"success", seen:candidates.length, written:stories.length, rejected:rejected.length, deleted, message };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown Card Hedge error";
+    const message = error instanceof Error ? error.message : "Unknown market sync error";
     console.error(JSON.stringify({
-      level:"error",message:"Card Hedge sync failed",source:"cardhedge",runId,stage:"failed",
+      level:"error",message:"Market sync failed",source:"cardhedge",runId,stage:"failed",
       durationMs:Date.now() - startedAt,seen,written,error:message,
     }));
     await finishSync(runId,"failed",seen,written,message);
