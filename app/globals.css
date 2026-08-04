@@ -41,7 +41,7 @@ button{color:inherit}
 .market-market-matchup.market-face{background:linear-gradient(125deg,#102c29 0 1px,transparent 1px 22px),linear-gradient(155deg,#071b19,#050706 72%)}
 .market-daily-market-brief.market-face{background:radial-gradient(circle at 48% 45%,#a3e63522,transparent 35%),linear-gradient(155deg,#152007,#050706 72%)}
 .market-face .market-banner>b{background:var(--accent);color:#050706;font-size:19px;font-weight:950}.market-face .market-banner strong{color:var(--accent)}
-.market-face h1{font-family:"Trebuchet MS","Avenir Next",Avenir,Arial,sans-serif;font-size:clamp(31px,9vw,40px);font-weight:800;line-height:.96;letter-spacing:-.04em}
+.market-face h1{font-family:var(--font-market-headline),"Trebuchet MS","Avenir Next",Avenir,Arial,sans-serif;font-size:clamp(31px,9vw,40px);font-weight:600;line-height:.96;letter-spacing:-.04em}
 .market-face .market-cue{border-color:var(--accent);background:var(--surface);box-shadow:0 0 25px var(--glow)}.market-face .market-cue span,.market-face .market-cue>b{color:var(--accent)}
 .market-stage{flex:1;min-height:0;display:grid;grid-template-columns:44% 1fr;align-items:center;gap:13px;padding:5px 0}
 .market-card-title{width:100%;margin:2px 0 12px;padding-top:10px;border-top:1px solid #ffffff1c;color:#f4f7f5;font-size:17px;font-weight:850;line-height:1.2;letter-spacing:-.015em}
