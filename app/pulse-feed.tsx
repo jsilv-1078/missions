@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRef, useState } from "react";
 import { remixFeedStories } from "@/lib/feed-order";
-import type { FeedStory, MarketStory, MarketStoryKind, NewsStory } from "@/lib/types";
+import type { FeedStory, MarketInsightItem, MarketStory, MarketStoryKind, NewsStory } from "@/lib/types";
 
 function PulseLogo() {
   return <div className="pulse-logo" aria-label="Card Madness Pulse"><Image className="pulse-brand-mark" src="/card-madness-symbol.png" alt="" width={40} height={50}/><b>PULSE</b></div>;
@@ -29,6 +29,10 @@ const MARKET_FORMATS:Record<MarketStoryKind,{ label:string;icon:string;cue:strin
   sales_surge:{ label:"SALES SURGE",icon:"⚡",cue:"PACE & SALES BREAKDOWN" },
   rookie_watch:{ label:"ROOKIE WATCH",icon:"RC",cue:"ROOKIE MARKET DETAILS" },
   vintage_mover:{ label:"VINTAGE MOVER",icon:"V",cue:"ERA, VALUE & SALES" },
+  player_snapshot:{ label:"PLAYER MARKET",icon:"P",cue:"CARDS, SALES & DIRECTION" },
+  price_volume:{ label:"PRICE + VOLUME",icon:"↕",cue:"SIGNAL, LIQUIDITY & COMPS" },
+  market_matchup:{ label:"MARKET MATCHUP",icon:"VS",cue:"COMPARE BOTH MARKETS" },
+  daily_market_brief:{ label:"DAILY MARKET BRIEF",icon:"D",cue:"BREADTH, LEADERS & VOLUME" },
 };
 
 function kindClass(kind: MarketStoryKind) {
@@ -37,6 +41,14 @@ function kindClass(kind: MarketStoryKind) {
 
 function CardImage({ story }: { story: MarketStory }) {
   return <div className="market-card-image"><Image src={story.imageUrl} alt={story.cardTitle} fill sizes="(max-width: 430px) 45vw, 190px"/></div>;
+}
+
+function InsightImage({ insight, className = "" }: { insight: MarketInsightItem; className?: string }) {
+  return <div className={`insight-card-image ${className}`}><Image src={insight.imageUrl} alt={insight.cardTitle} fill sizes="(max-width: 430px) 40vw, 170px"/></div>;
+}
+
+function moveLabel(value: number) {
+  return `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
 }
 
 function GradeStamp({ grade }: { grade: string }) {
@@ -52,6 +64,37 @@ function gradePremiumLabel(prices: MarketStory["gradePrices"], index: number) {
 }
 
 function MarketFrontVisual({ story }: { story: MarketStory }) {
+  if (story.storyKind === "daily_market_brief") {
+    const tracked = story.insight?.cardsTracked ?? 0;
+    const rising = story.insight?.risingCount ?? 0;
+    const falling = story.insight?.fallingCount ?? 0;
+    const flat = story.insight?.flatCount ?? 0;
+    const breadth = tracked ? Math.round((rising / tracked) * 100) : 0;
+    return <div className="brief-stage">
+      <div className="brief-score"><span>MARKET BREADTH</span><strong>{breadth}%</strong><b>OF TRACKED CARDS RISING</b></div>
+      <div className="brief-counts"><div className="up"><strong>{rising}</strong><span>RISING</span></div><div className="down"><strong>{falling}</strong><span>FALLING</span></div><div><strong>{flat}</strong><span>FLAT</span></div></div>
+      <p><b>{story.insight?.totalSales30d?.toLocaleString() ?? 0}</b> recorded sales across <b>{tracked}</b> verified markets</p>
+    </div>;
+  }
+
+  if (story.storyKind === "player_snapshot") {
+    const items = story.insight?.items ?? [];
+    const average = story.insight?.averageChange30d ?? 0;
+    return <div className="player-snapshot-stage">
+      <div className="snapshot-card-strip">{items.slice(0,3).map((market) => <InsightImage key={market.id} insight={market}/>)}</div>
+      <div className="player-snapshot-total"><span>WEIGHTED 30-DAY DIRECTION</span><strong className={average < 0 ? "down" : "up"}>{moveLabel(average)}</strong><div><b>{story.insight?.cardsTracked ?? items.length}</b> CARDS <i/> <b>{story.insight?.totalSales30d?.toLocaleString() ?? 0}</b> SALES</div></div>
+    </div>;
+  }
+
+  if (story.storyKind === "price_volume") return <div className="market-stage signal-stage">
+    <CardImage story={story}/><div className="signal-tally"><GradeStamp grade={story.grade}/><small>{story.insight?.label ?? "PRICE + VOLUME"}</small><strong className={story.change30d < 0 ? "down" : "up"}>{moveLabel(story.change30d)}</strong><b>{story.sales30d.toLocaleString()} SALES</b><span>{story.insight?.volumePercentile ?? 0}th percentile in Pulse</span></div>
+  </div>;
+
+  if (story.storyKind === "market_matchup") {
+    const items = story.insight?.items ?? [];
+    return <div className="matchup-stage">{items.slice(0,2).map((market,index) => <div className="matchup-side" key={market.id}><InsightImage insight={market}/><span>{market.player}</span><strong>{currency(market.currentValue)}</strong><b className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</b>{index === 0 ? <i>VS</i> : null}</div>)}</div>;
+  }
+
   if (story.storyKind === "high_sales_30d") return <div className="market-stage volume-stage">
     <CardImage story={story}/><div className="volume-tally"><GradeStamp grade={story.grade}/><small>RECORDED SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>30 DAYS</b><span>{story.sales7d.toLocaleString()} in the last 7 days</span></div>
   </div>;
@@ -135,8 +178,32 @@ function ComparableSales({ story }: { story: MarketStory }) {
   return <div className="comps"><h2>Verified comparable sales</h2>{story.comps.map((comp,index) => <div key={comp.date + index}><span>{dateLabel(comp.date)}</span><small>{comp.venue ?? "Sale"}</small><strong>{currency(comp.price)}</strong></div>)}</div>;
 }
 
+function InsightMarketRows({ label, items }: { label:string; items:MarketInsightItem[] }) {
+  if (!items.length) return null;
+  return <section className="insight-market-list"><header>{label}</header>{items.map((market) => <article key={market.id}>
+    <InsightImage insight={market}/><div><strong>{market.player}</strong><span>{market.cardTitle}</span><small>{market.grade} · {market.sales30d.toLocaleString()} sales</small></div><aside><b>{currency(market.currentValue)}</b><em className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</em></aside>
+  </article>)}</section>;
+}
+
 function MarketDetailLead({ story }: { story: MarketStory }) {
   const negative = story.change30d < 0;
+  if (story.storyKind === "daily_market_brief") {
+    const tracked = story.insight?.cardsTracked ?? 0;
+    const rising = story.insight?.risingCount ?? 0;
+    const falling = story.insight?.fallingCount ?? 0;
+    const flat = story.insight?.flatCount ?? 0;
+    const breadth = tracked ? Math.round((rising / tracked) * 100) : 0;
+    return <><div className="brief-detail"><span>DAILY MARKET BREADTH</span><strong>{breadth}%</strong><b>{rising} OF {tracked} TRACKED CARDS RISING</b><div><p className="up"><b>{rising}</b><small>RISING</small></p><p className="down"><b>{falling}</b><small>FALLING</small></p><p><b>{flat}</b><small>FLAT</small></p></div><em>{story.insight?.totalSales30d?.toLocaleString() ?? 0} TOTAL 30-DAY SALES</em></div><InsightMarketRows label="TODAY'S MARKET LEADERS" items={story.insight?.items ?? []}/></>;
+  }
+  if (story.storyKind === "player_snapshot") {
+    const average = story.insight?.averageChange30d ?? 0;
+    return <><div className="player-detail-summary"><span>PLAYER MARKET SNAPSHOT</span><strong className={average < 0 ? "down" : "up"}>{moveLabel(average)}</strong><b>WEIGHTED 30-DAY DIRECTION</b><div><p><small>TRACKED CARDS</small><b>{story.insight?.cardsTracked ?? 0}</b></p><p><small>RECORDED SALES</small><b>{story.insight?.totalSales30d?.toLocaleString() ?? 0}</b></p></div></div><InsightMarketRows label="CARDS IN THIS SNAPSHOT" items={story.insight?.items ?? []}/></>;
+  }
+  if (story.storyKind === "price_volume") return <><div className="signal-detail"><span>PRICE + VOLUME SIGNAL</span><b>{story.insight?.label ?? "MARKET SIGNAL"}</b><strong className={negative ? "down" : "up"}>{moveLabel(story.change30d)}</strong><div><p><small>30-DAY SALES</small><b>{story.sales30d.toLocaleString()}</b></p><p><small>VOLUME RANK</small><b>{story.insight?.volumePercentile ?? 0}TH %ILE</b></p></div></div><MarketSnapshot items={[
+    {label:"CURRENT FMV",value:currency(story.currentValue)},
+    {label:"30 DAYS AGO",value:currency(priorValue(story))},
+  ]} story={story}/></>;
+  if (story.storyKind === "market_matchup") return <><div className="matchup-detail"><span>HEAD-TO-HEAD MARKET</span>{(story.insight?.items ?? []).slice(0,2).map((market,index) => <article key={market.id}><InsightImage insight={market}/><div><small>{index === 0 ? "MARKET A" : "MARKET B"}</small><strong>{market.player}</strong><span>{market.cardTitle}</span><p><b>{market.grade}</b><b>{currency(market.currentValue)}</b><b className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</b><b>{market.sales30d} sales</b></p></div>{index === 0 ? <i>VS</i> : null}</article>)}</div></>;
   if (story.storyKind === "high_sales_30d") {
     const recentShare = story.sales30d ? Math.round((story.sales7d / story.sales30d) * 100) : 0;
     return <><div className="volume-detail"><span>30-DAY SALES</span><strong>{story.sales30d.toLocaleString()}</strong><b>{story.sales7d} in the last 7 days</b><small>{recentShare}% of monthly sales occurred this week</small></div><MetricGrid story={story}/></>;
@@ -170,12 +237,13 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
 
 function MarketDetail({ story, close }: { story: MarketStory; close: () => void }) {
   const format = MARKET_FORMATS[story.storyKind];
-  const hideExtraComps = ["recent_sale","rookie_watch","vintage_mover","biggest_gain","biggest_loss"].includes(story.storyKind);
+  const automated = ["player_snapshot","price_volume","market_matchup","daily_market_brief"].includes(story.storyKind);
+  const hideExtraComps = ["recent_sale","rookie_watch","vintage_mover","biggest_gain","biggest_loss","player_snapshot","price_volume","market_matchup","daily_market_brief"].includes(story.storyKind);
   return <section className={"detail-face market-detail " + kindClass(story.storyKind)}>
     <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{format.label}</span><strong>{story.player}</strong></div><b>{format.icon}</b></header>
     <div className="detail-scroll">
       <MarketDetailLead story={story}/>
-      <div className="confidence"><div><span>DATA CONFIDENCE</span><strong>GRADE {story.confidenceGrade}</strong></div><p>Updated {story.freshnessDays} day{story.freshnessDays === 1 ? "" : "s"} ago</p></div>
+      <div className="confidence"><div><span>{automated ? "DATA SOURCE" : "DATA CONFIDENCE"}</span><strong>{automated ? "CARD HEDGE" : `GRADE ${story.confidenceGrade}`}</strong></div><p>{automated ? "Regenerated with each sync" : `Updated ${story.freshnessDays} day${story.freshnessDays === 1 ? "" : "s"} ago`}</p></div>
       {!hideExtraComps ? <ComparableSales story={story}/> : null}
       <div className="why"><span>WHY IT MATTERS</span><p>{story.summary}</p></div>
     </div>
