@@ -40,7 +40,7 @@ function kindClass(kind: MarketStoryKind) {
 }
 
 function CardImage({ story }: { story: MarketStory }) {
-  return <figure className="market-card-figure"><div className="market-card-image"><Image src={story.imageUrl} alt={story.cardTitle} fill sizes="(max-width: 430px) 45vw, 190px"/></div><figcaption>{story.cardTitle}</figcaption></figure>;
+  return <div className="market-card-image"><Image src={story.imageUrl} alt={story.cardTitle} fill sizes="(max-width: 430px) 45vw, 190px"/></div>;
 }
 
 function InsightImage({ insight, className = "" }: { insight: MarketInsightItem; className?: string }) {
@@ -121,11 +121,13 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
 function MarketFront({ story, open }: { story: MarketStory; open: () => void }) {
   const format = MARKET_FORMATS[story.storyKind];
   const styleClass = kindClass(story.storyKind);
+  const showCardTitle = !["player_snapshot","market_matchup","daily_market_brief"].includes(story.storyKind);
   return <section className={"story-face market-face " + styleClass}>
     <header><PulseLogo/><span className="live-pill">LIVE DATA</span></header>
     <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
     <h1>{story.headline}</h1>
     <MarketFrontVisual story={story}/>
+    {showCardTitle ? <p className="market-card-title">{story.cardTitle}</p> : null}
     <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>{format.cue}</strong><b>→</b></button>
   </section>;
 }
