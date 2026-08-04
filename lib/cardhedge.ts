@@ -258,7 +258,7 @@ async function enrichCandidate(card: Candidate) {
   const year = cardYear(card);
   const isVintage = year >= 1800 && year < 1980;
   const vintageOnly = card.discoveryKinds.length === 1 && card.discoveryKinds[0] === "vintage_mover";
-  if (vintageOnly && !isVintage) return rejection(card,"vintage search did not resolve to a pre-1980 set");
+  if (vintageOnly && !isVintage) return rejection(card,"vintage search did not resolve to a vintage card");
   const sales30d = Number(card["30 Day Sales"] ?? 0);
   const sales7d = Number(card["7 Day Sales"] ?? 0);
   const minimumSales30d = isVintage ? MIN_VINTAGE_30_DAY_SALES : MIN_30_DAY_SALES;
@@ -578,7 +578,7 @@ export async function syncMarketData() {
   let seen = 0;
   let written = 0;
   try {
-    await reportSyncStage(runId,"discovery","Searching for modern cards, grading premiums and verified pre-1980 years…");
+    await reportSyncStage(runId,"discovery","Searching for modern cards, grading premiums and verified vintage years…");
     const discovery = await discoverCandidates();
     const candidates = discovery.candidates;
     seen = candidates.length;
