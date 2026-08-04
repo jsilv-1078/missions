@@ -40,7 +40,7 @@ function kindClass(kind: MarketStoryKind) {
 }
 
 function CardImage({ story }: { story: MarketStory }) {
-  return <div className="market-card-image"><Image src={story.imageUrl} alt={story.cardTitle} fill sizes="(max-width: 430px) 45vw, 190px"/></div>;
+  return <figure className="market-card-figure"><div className="market-card-image"><Image src={story.imageUrl} alt={story.cardTitle} fill sizes="(max-width: 430px) 45vw, 190px"/></div><figcaption>{story.cardTitle}</figcaption></figure>;
 }
 
 function InsightImage({ insight, className = "" }: { insight: MarketInsightItem; className?: string }) {
@@ -81,7 +81,7 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
     const items = story.insight?.items ?? [];
     const average = story.insight?.averageChange30d ?? 0;
     return <div className="player-snapshot-stage">
-      <div className="snapshot-card-strip">{items.slice(0,3).map((market) => <InsightImage key={market.id} insight={market}/>)}</div>
+      <div className="snapshot-card-strip">{items.slice(0,3).map((market) => <figure className="snapshot-card" key={market.id}><InsightImage insight={market}/><figcaption>{market.cardTitle}</figcaption></figure>)}</div>
       <div className="player-snapshot-total"><span>WEIGHTED 30-DAY DIRECTION</span><strong className={average < 0 ? "down" : "up"}>{moveLabel(average)}</strong><div><b>{story.insight?.cardsTracked ?? items.length}</b> CARDS <i/> <b>{story.insight?.totalSales30d?.toLocaleString() ?? 0}</b> SALES</div></div>
     </div>;
   }
@@ -125,7 +125,6 @@ function MarketFront({ story, open }: { story: MarketStory; open: () => void }) 
     <header><PulseLogo/><span className="live-pill">LIVE DATA</span></header>
     <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
     <h1>{story.headline}</h1>
-    <p className="subject-line">{story.cardTitle}</p>
     <MarketFrontVisual story={story}/>
     <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>{format.cue}</strong><b>→</b></button>
   </section>;
