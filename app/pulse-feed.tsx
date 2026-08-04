@@ -52,26 +52,30 @@ function CardImage({ story }: { story: MarketStory }) {
   return <div className="market-card-image"><Image src={story.imageUrl} alt={story.cardTitle} fill sizes="(max-width: 430px) 45vw, 190px"/></div>;
 }
 
+function GradeStamp({ grade }: { grade: string }) {
+  return <div className="market-grade"><span>CARD GRADE</span><strong>{grade}</strong></div>;
+}
+
 function MarketFrontVisual({ story }: { story: MarketStory }) {
   if (story.storyKind === "high_sales_30d") return <div className="market-stage volume-stage">
-    <CardImage story={story}/><div className="volume-tally"><small>RECORDED SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>30 DAYS</b><span>{story.sales7d.toLocaleString()} in the last 7 days</span></div>
+    <CardImage story={story}/><div className="volume-tally"><GradeStamp grade={story.grade}/><small>RECORDED SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>30 DAYS</b><span>{story.sales7d.toLocaleString()} in the last 7 days</span></div>
   </div>;
 
   if (story.storyKind === "biggest_gain" || story.storyKind === "biggest_loss") {
     const loss = story.storyKind === "biggest_loss";
-    return <div className="market-stage mover-stage"><CardImage story={story}/><div className="mover-tally"><small>30-DAY MOVE</small><strong>{loss ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{loss ? "MOVING LOWER" : "MOVING HIGHER"}</b><span>{currency(story.currentValue)} current FMV</span></div></div>;
+    return <div className="market-stage mover-stage"><CardImage story={story}/><div className="mover-tally"><GradeStamp grade={story.grade}/><small>30-DAY MOVE</small><strong>{loss ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{loss ? "MOVING LOWER" : "MOVING HIGHER"}</b><span>{currency(story.currentValue)} current FMV</span></div></div>;
   }
 
-  if (story.storyKind === "recent_sale") return <div className="market-stage sale-stage"><CardImage story={story}/><div className="sale-ticket"><small>CONFIRMED COMP</small><b>SOLD TODAY</b><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><span>{story.recentSale?.venue ?? "Recorded sale"}</span><em>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</em></div></div>;
+  if (story.storyKind === "recent_sale") return <div className="market-stage sale-stage"><CardImage story={story}/><div className="sale-ticket"><GradeStamp grade={story.grade}/><small>CONFIRMED COMP</small><b>SOLD TODAY</b><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><span>{story.recentSale?.venue ?? "Recorded sale"}</span><em>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</em></div></div>;
 
   if (story.storyKind === "grade_gap") {
     const prices = story.gradePrices.length === 2 ? story.gradePrices : [{ grade:story.grade,price:story.currentValue }];
-    return <div className="market-stage gap-stage"><CardImage story={story}/><div className="grade-ladder"><small>LATEST GRADE PRICES</small>{prices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span>{item.grade}</span><strong>{currency(item.price)}</strong></div>)}<b>{story.gradeGapMultiple.toFixed(1)}× PREMIUM</b></div></div>;
+    return <div className="market-stage gap-stage"><CardImage story={story}/><div className="grade-ladder"><GradeStamp grade={story.grade}/><small>LATEST GRADE PRICES</small>{prices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span>{item.grade}</span><strong>{currency(item.price)}</strong></div>)}<b>{story.gradeGapMultiple.toFixed(1)}× PREMIUM</b></div></div>;
   }
 
-  if (story.storyKind === "sales_surge") return <div className="market-stage surge-stage"><CardImage story={story}/><div className="surge-tally"><small>SALES PACE</small><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><b>FASTER</b><div><span><strong>{story.sales7d}</strong>LAST 7D</span><i>→</i><span><strong>{story.previous23DaySales}</strong>PRIOR 23D</span></div></div></div>;
+  if (story.storyKind === "sales_surge") return <div className="market-stage surge-stage"><CardImage story={story}/><div className="surge-tally"><GradeStamp grade={story.grade}/><small>SALES PACE</small><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><b>FASTER</b><div><span><strong>{story.sales7d}</strong>LAST 7D</span><i>→</i><span><strong>{story.previous23DaySales}</strong>PRIOR 23D</span></div></div></div>;
 
-  return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><small>ROOKIE FMV</small><strong>{currency(story.currentValue)}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>{story.sales30d} sales · 30 days</span></div></div>;
+  return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><GradeStamp grade={story.grade}/><small>ROOKIE FMV</small><strong>{currency(story.currentValue)}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>{story.sales30d} sales · 30 days</span></div></div>;
 }
 
 function MarketFront({ story, open }: { story: MarketStory; open: () => void }) {
@@ -81,7 +85,7 @@ function MarketFront({ story, open }: { story: MarketStory; open: () => void }) 
     <header><PulseLogo/><span className="live-pill">LIVE DATA</span></header>
     <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
     <h1>{story.headline}</h1>
-    <p className="subject-line">{story.cardTitle} · {story.grade}</p>
+    <p className="subject-line">{story.cardTitle}</p>
     <MarketFrontVisual story={story}/>
     <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>{format.cue}</strong><b>→</b></button>
   </section>;
