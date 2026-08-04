@@ -91,12 +91,32 @@ export function marketHeadline({
     "Collector turnover surges for " + player,
   ],variant);
 
-  if (storyKind === "rookie_watch") return stableChoice(seed,[
-    player + " rookie market draws collector attention",
-    "Rookie watch: " + player + " stays active",
-    player + " RC logs " + sales + " sales in 30 days",
-    "Collectors keep this " + player + " rookie in view",
-  ],variant);
+  if (storyKind === "rookie_watch") {
+    if (change30d > 0.05) return stableChoice(seed,[
+      "Rookie watch: " + player + " gains " + change + "%",
+      player + " rookie climbs " + change + "% with " + sales + " sales",
+      player + " RC stays active and moves " + change + "% higher",
+      sales + " monthly sales accompany a " + change + "% rookie gain",
+      "Collectors trade " + player + " as the rookie rises " + change + "%",
+      player + " rookie market advances " + change + "% over 30 days",
+    ],variant);
+
+    if (change30d < -0.05) return stableChoice(seed,[
+      "Rookie watch: " + player + " falls " + change + "%",
+      player + " rookie slips " + change + "% despite " + sales + " sales",
+      player + " RC stays active but moves " + change + "% lower",
+      sales + " monthly sales accompany a " + change + "% rookie decline",
+      "Collectors trade " + player + " as the rookie falls " + change + "%",
+      player + " rookie market retreats " + change + "% over 30 days",
+    ],variant);
+
+    return stableChoice(seed,[
+      "Rookie watch: " + player + " holds steady",
+      player + " rookie stays flat amid " + sales + " monthly sales",
+      player + " RC remains active with little price movement",
+      sales + " sales keep " + player + " busy while the rookie price holds",
+    ],variant);
+  }
 
   if (storyKind === "vintage_mover") {
     const year = cardYear > 0 ? String(cardYear) : "Pre-1980";
