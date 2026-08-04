@@ -1,7 +1,19 @@
+export type MarketStoryKind =
+  | "high_sales_30d"
+  | "biggest_gain"
+  | "biggest_loss"
+  | "recent_sale"
+  | "grade_gap"
+  | "sales_surge"
+  | "rookie_watch";
+
+export type MarketGradePrice = { grade: string; price: number };
+export type MarketSale = { date: string; price: number; venue?: string };
+
 export type MarketStory = {
   id: string;
   type: "market";
-  storyKind: "gain" | "decline" | "volume" | "watchlist";
+  storyKind: MarketStoryKind;
   player: string;
   sport: string;
   headline: string;
@@ -19,6 +31,12 @@ export type MarketStory = {
   freshnessDays: number;
   chart: number[];
   comps: Array<{ date: string; price: number; venue?: string }>;
+  rookie: boolean;
+  gradePrices: MarketGradePrice[];
+  gradeGapMultiple: number;
+  salesPaceMultiple: number;
+  previous23DaySales: number;
+  recentSale?: MarketSale;
   updatedAt: string;
   demo: boolean;
 };

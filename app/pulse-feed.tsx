@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRef, useState } from "react";
-import type { FeedStory, MarketStory, NewsStory } from "@/lib/types";
+import type { FeedStory, MarketStory, MarketStoryKind, NewsStory } from "@/lib/types";
 
 const FEED_PAGE_SIZE = 12;
 
@@ -15,7 +15,24 @@ function currency(value: number) {
 }
 
 function dateLabel(value: string) {
-  return new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",year:"numeric"}).format(new Date(value));
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",year:"numeric"}).format(date)
+    : "Date unavailable";
+}
+
+const MARKET_FORMATS:Record<MarketStoryKind,{ label:string;icon:string;cue:string }> = {
+  high_sales_30d:{ label:"HIGH 30-DAY SALES",icon:"30",cue:"VOLUME, SALES & CONFIDENCE" },
+  biggest_gain:{ label:"BIGGEST PRICE GAIN",icon:"↑",cue:"PRICE TREND & COMPS" },
+  biggest_loss:{ label:"BIGGEST PRICE LOSS",icon:"↓",cue:"PRICE TREND & COMPS" },
+  recent_sale:{ label:"SOLD TODAY",icon:"✓",cue:"SALE RECEIPT & COMPS" },
+  grade_gap:{ label:"GRADE GAP",icon:"G",cue:"COMPARE GRADES & PRICES" },
+  sales_surge:{ label:"SALES SURGE",icon:"⚡",cue:"PACE & SALES BREAKDOWN" },
+  rookie_watch:{ label:"ROOKIE WATCH",icon:"RC",cue:"ROOKIE MARKET DETAILS" },
+};
+
+function kindClass(kind: MarketStoryKind) {
+  return "market-" + kind.replaceAll("_","-");
 }
 
 function LineChart({ values, negative }: { values: number[]; negative: boolean }) {
@@ -31,22 +48,42 @@ function LineChart({ values, negative }: { values: number[]; negative: boolean }
   return <div className={"line-chart " + (negative ? "negative" : "")}><svg viewBox="0 0 320 100" role="img" aria-label="30-day price trend"><polyline points={points}/></svg><div><span>30 DAYS AGO</span><span>TODAY</span></div></div>;
 }
 
+function CardImage({ story }: { story: MarketStory }) {
+  return <div className="market-card-image"><Image src={story.imageUrl} alt={story.cardTitle} fill sizes="(max-width: 430px) 45vw, 190px"/></div>;
+}
+
+function MarketFrontVisual({ story }: { story: MarketStory }) {
+  if (story.storyKind === "high_sales_30d") return <div className="market-stage volume-stage">
+    <CardImage story={story}/><div className="volume-tally"><small>RECORDED SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>30 DAYS</b><span>{story.sales7d.toLocaleString()} in the last 7 days</span></div>
+  </div>;
+
+  if (story.storyKind === "biggest_gain" || story.storyKind === "biggest_loss") {
+    const loss = story.storyKind === "biggest_loss";
+    return <div className="market-stage mover-stage"><CardImage story={story}/><div className="mover-tally"><small>30-DAY MOVE</small><strong>{loss ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{loss ? "MOVING LOWER" : "MOVING HIGHER"}</b><span>{currency(story.currentValue)} current FMV</span></div></div>;
+  }
+
+  if (story.storyKind === "recent_sale") return <div className="market-stage sale-stage"><CardImage story={story}/><div className="sale-ticket"><small>CONFIRMED COMP</small><b>SOLD TODAY</b><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><span>{story.recentSale?.venue ?? "Recorded sale"}</span><em>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</em></div></div>;
+
+  if (story.storyKind === "grade_gap") {
+    const prices = story.gradePrices.length === 2 ? story.gradePrices : [{ grade:story.grade,price:story.currentValue }];
+    return <div className="market-stage gap-stage"><CardImage story={story}/><div className="grade-ladder"><small>LATEST GRADE PRICES</small>{prices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span>{item.grade}</span><strong>{currency(item.price)}</strong></div>)}<b>{story.gradeGapMultiple.toFixed(1)}× PREMIUM</b></div></div>;
+  }
+
+  if (story.storyKind === "sales_surge") return <div className="market-stage surge-stage"><CardImage story={story}/><div className="surge-tally"><small>SALES PACE</small><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><b>FASTER</b><div><span><strong>{story.sales7d}</strong>LAST 7D</span><i>→</i><span><strong>{story.previous23DaySales}</strong>PRIOR 23D</span></div></div></div>;
+
+  return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><small>ROOKIE FMV</small><strong>{currency(story.currentValue)}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>{story.sales30d} sales · 30 days</span></div></div>;
+}
+
 function MarketFront({ story, open }: { story: MarketStory; open: () => void }) {
-  const negative = story.change30d < 0;
-  return <section className="story-face market-face">
+  const format = MARKET_FORMATS[story.storyKind];
+  const styleClass = kindClass(story.storyKind);
+  return <section className={"story-face market-face " + styleClass}>
     <header><PulseLogo/><span className="live-pill">LIVE DATA</span></header>
-    <div className="type-banner market-banner"><b>$</b><div><span>MARKET DATA</span><strong>{story.storyKind === "volume" ? "HIGH ACTIVITY" : negative ? "PRICE DECLINE" : "PRICE GAIN"}</strong></div></div>
+    <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
     <h1>{story.headline}</h1>
     <p className="subject-line">{story.cardTitle} · {story.grade}</p>
-    <div className="market-hero">
-      <div className="card-photo"><Image src={story.imageUrl} alt={story.cardTitle} fill sizes="(max-width: 799px) 44vw, 24vw"/></div>
-      <div className="price-signal">
-        <span>CURRENT FMV</span><strong>{currency(story.currentValue)}</strong>
-        <b className={negative ? "down" : "up"}>{negative ? "↓" : "↑"} {Math.abs(story.change30d).toFixed(1)}%</b>
-        <small>30-DAY MOVEMENT</small>
-      </div>
-    </div>
-    <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>CHART, SALES & CONFIDENCE</strong><b>→</b></button>
+    <MarketFrontVisual story={story}/>
+    <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>{format.cue}</strong><b>→</b></button>
   </section>;
 }
 
@@ -65,21 +102,45 @@ function NewsFront({ story, open }: { story: NewsStory; open: () => void }) {
   </section>;
 }
 
-function MarketDetail({ story, close }: { story: MarketStory; close: () => void }) {
+function MetricGrid({ story }: { story: MarketStory }) {
+  return <div className="metric-grid"><div><span>7D CHANGE</span><strong>{story.change7d > 0 ? "+" : ""}{story.change7d.toFixed(1)}%</strong></div><div><span>30D CHANGE</span><strong>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</strong></div><div><span>7D SALES</span><strong>{story.sales7d}</strong></div><div><span>30D SALES</span><strong>{story.sales30d}</strong></div></div>;
+}
+
+function SalesContextGrid({ story, surge = false }: { story: MarketStory; surge?: boolean }) {
+  return <div className="metric-grid"><div><span>7D SALES</span><strong>{story.sales7d}</strong></div><div><span>{surge ? "PRIOR 23D" : "30D SALES"}</span><strong>{surge ? story.previous23DaySales : story.sales30d}</strong></div><div><span>{surge ? "30D TOTAL" : "7D CHANGE"}</span><strong>{surge ? story.sales30d : (story.change7d > 0 ? "+" : "") + story.change7d.toFixed(1) + "%"}</strong></div><div><span>CURRENT FMV</span><strong>{currency(story.currentValue)}</strong></div></div>;
+}
+
+function ComparableSales({ story }: { story: MarketStory }) {
+  if (!story.comps.length) return null;
+  return <div className="comps"><h2>Verified comparable sales</h2>{story.comps.map((comp,index) => <div key={comp.date + index}><span>{dateLabel(comp.date)}</span><small>{comp.venue ?? "Sale"}</small><strong>{currency(comp.price)}</strong></div>)}</div>;
+}
+
+function MarketDetailLead({ story }: { story: MarketStory }) {
   const negative = story.change30d < 0;
-  return <section className="detail-face">
-    <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>MARKET DATA</span><strong>{story.player}</strong></div><b>$</b></header>
+  if (story.storyKind === "high_sales_30d") {
+    const recentShare = story.sales30d ? Math.round((story.sales7d / story.sales30d) * 100) : 0;
+    return <><div className="volume-detail"><span>30-DAY SALES</span><strong>{story.sales30d.toLocaleString()}</strong><b>{story.sales7d} in the last 7 days</b><small>{recentShare}% of monthly sales occurred this week</small></div><MetricGrid story={story}/></>;
+  }
+  if (story.storyKind === "recent_sale") return <><div className="receipt-detail"><span>CONFIRMED SALE · {story.grade}</span><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><div><b>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</b><small>{story.recentSale?.venue ?? "Recorded comp"}</small></div><p>Current FMV <b>{currency(story.currentValue)}</b></p></div><ComparableSales story={story}/></>;
+  if (story.storyKind === "grade_gap") return <><div className="gap-detail"><span>GRADE PRICE LADDER</span><strong>{story.gradeGapMultiple.toFixed(1)}×</strong><small>PREMIUM BETWEEN GRADES</small>{story.gradePrices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><b>{item.grade}</b><strong>{currency(item.price)}</strong></div>)}</div><div className="detail-price compact"><span>CURRENT FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong></div></>;
+  if (story.storyKind === "sales_surge") {
+    const recentDaily = story.sales7d / 7;
+    const priorDaily = story.previous23DaySales / 23;
+    return <><div className="surge-detail"><span>SALES VELOCITY</span><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><small>FASTER DAILY PACE</small><div><p><b>{priorDaily.toFixed(1)}</b><span>DAILY · PRIOR 23D</span></p><i>→</i><p><b>{recentDaily.toFixed(1)}</b><span>DAILY · LAST 7D</span></p></div></div><SalesContextGrid story={story} surge/></>;
+  }
+  if (story.storyKind === "rookie_watch") return <><div className="rookie-detail"><b>RC</b><div><span>ROOKIE CARD FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong><small>{story.sales30d} recorded sales in 30 days</small></div></div><LineChart values={story.chart} negative={negative}/><SalesContextGrid story={story}/></>;
+  return <><div className="detail-price"><span>30-DAY {story.storyKind === "biggest_loss" ? "PRICE LOSS" : "PRICE GAIN"} · {story.grade}</span><strong>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{currency(story.currentValue)} FMV</b></div><LineChart values={story.chart} negative={negative}/><MetricGrid story={story}/></>;
+}
+
+function MarketDetail({ story, close }: { story: MarketStory; close: () => void }) {
+  const format = MARKET_FORMATS[story.storyKind];
+  const hideExtraComps = story.storyKind === "recent_sale";
+  return <section className={"detail-face market-detail " + kindClass(story.storyKind)}>
+    <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{format.label}</span><strong>{story.player}</strong></div><b>{format.icon}</b></header>
     <div className="detail-scroll">
-      <div className="detail-price"><span>CURRENT FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong><b className={negative ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b></div>
-      <LineChart values={story.chart} negative={negative}/>
-      <div className="metric-grid">
-        <div><span>7D CHANGE</span><strong>{story.change7d > 0 ? "+" : ""}{story.change7d.toFixed(1)}%</strong></div>
-        <div><span>30D CHANGE</span><strong>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</strong></div>
-        <div><span>7D SALES</span><strong>{story.sales7d}</strong></div>
-        <div><span>30D SALES</span><strong>{story.sales30d}</strong></div>
-      </div>
+      <MarketDetailLead story={story}/>
       <div className="confidence"><div><span>DATA CONFIDENCE</span><strong>GRADE {story.confidenceGrade}</strong></div><p>Updated {story.freshnessDays} day{story.freshnessDays === 1 ? "" : "s"} ago</p></div>
-      {story.comps.length ? <div className="comps"><h2>Recent comparable sales</h2>{story.comps.map((comp,index) => <div key={comp.date + index}><span>{dateLabel(comp.date)}</span><small>{comp.venue ?? "Sale"}</small><strong>{currency(comp.price)}</strong></div>)}</div> : null}
+      {!hideExtraComps ? <ComparableSales story={story}/> : null}
       <div className="why"><span>WHY IT MATTERS</span><p>{story.summary}</p></div>
     </div>
     <button className="return-cue" onClick={close}>← SWIPE LEFT TO RETURN</button>

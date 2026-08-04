@@ -40,7 +40,8 @@ async function initializeSchema() {
     "change_30d NUMERIC(10,2) NOT NULL DEFAULT 0, sales_7d INTEGER NOT NULL DEFAULT 0,",
     "sales_30d INTEGER NOT NULL DEFAULT 0, confidence_grade TEXT NOT NULL DEFAULT 'N/A',",
     "freshness_days INTEGER NOT NULL DEFAULT 0, chart JSONB NOT NULL DEFAULT '[]'::jsonb,",
-    "comps JSONB NOT NULL DEFAULT '[]'::jsonb, source_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "comps JSONB NOT NULL DEFAULT '[]'::jsonb, market_meta JSONB NOT NULL DEFAULT '{}'::jsonb,",
+    "source_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
     "demo BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
     "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
   ].join(" "));
@@ -64,6 +65,7 @@ async function initializeSchema() {
     "message TEXT, started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), finished_at TIMESTAMPTZ)",
   ].join(" "));
   await sql.query("CREATE INDEX IF NOT EXISTS market_stories_updated_idx ON market_stories(updated_at DESC)");
+  await sql.query("ALTER TABLE market_stories ADD COLUMN IF NOT EXISTS market_meta JSONB NOT NULL DEFAULT '{}'::jsonb");
   await sql.query("CREATE INDEX IF NOT EXISTS news_stories_published_idx ON news_stories(published_at DESC)");
   await sql.query("DELETE FROM market_stories WHERE demo=TRUE");
   await sql.query("DELETE FROM news_stories WHERE demo=TRUE");
@@ -87,19 +89,23 @@ export async function upsertMarketStory(story: MarketStory, initialize = true) {
   if (initialize) await ensureSchema();
   await getSql().query([
     "INSERT INTO market_stories (id,card_id,story_kind,player,sport,headline,summary,card_title,image_url,grade,",
-    "current_value,change_7d,change_30d,sales_7d,sales_30d,confidence_grade,freshness_days,chart,comps,source_updated_at,demo,updated_at)",
-    "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19::jsonb,$20,$21,NOW())",
+    "current_value,change_7d,change_30d,sales_7d,sales_30d,confidence_grade,freshness_days,chart,comps,market_meta,source_updated_at,demo,updated_at)",
+    "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19::jsonb,$20::jsonb,$21,$22,NOW())",
     "ON CONFLICT (card_id) DO UPDATE SET id=EXCLUDED.id,story_kind=EXCLUDED.story_kind,player=EXCLUDED.player,",
     "sport=EXCLUDED.sport,headline=EXCLUDED.headline,summary=EXCLUDED.summary,card_title=EXCLUDED.card_title,",
     "image_url=EXCLUDED.image_url,grade=EXCLUDED.grade,current_value=EXCLUDED.current_value,change_7d=EXCLUDED.change_7d,",
     "change_30d=EXCLUDED.change_30d,sales_7d=EXCLUDED.sales_7d,sales_30d=EXCLUDED.sales_30d,",
     "confidence_grade=EXCLUDED.confidence_grade,freshness_days=EXCLUDED.freshness_days,chart=EXCLUDED.chart,",
-    "comps=EXCLUDED.comps,source_updated_at=EXCLUDED.source_updated_at,demo=EXCLUDED.demo,updated_at=NOW()",
+    "comps=EXCLUDED.comps,market_meta=EXCLUDED.market_meta,source_updated_at=EXCLUDED.source_updated_at,demo=EXCLUDED.demo,updated_at=NOW()",
   ].join(" "), [
     story.id, story.cardId, story.storyKind, story.player, story.sport, story.headline, story.summary,
     story.cardTitle, story.imageUrl, story.grade, story.currentValue, story.change7d, story.change30d,
     story.sales7d, story.sales30d, story.confidenceGrade, story.freshnessDays, JSON.stringify(story.chart),
-    JSON.stringify(story.comps), story.updatedAt, story.demo,
+    JSON.stringify(story.comps), JSON.stringify({
+      rookie:story.rookie, gradePrices:story.gradePrices, gradeGapMultiple:story.gradeGapMultiple,
+      salesPaceMultiple:story.salesPaceMultiple, previous23DaySales:story.previous23DaySales,
+      recentSale:story.recentSale,
+    }), story.updatedAt, story.demo,
   ]);
 }
 
@@ -129,18 +135,41 @@ async function upsertNewsStory(story: NewsStory, initialize = true) {
 }
 
 function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
+  const legacyKinds:Record<string,MarketStory["storyKind"]> = {
+    volume:"high_sales_30d", gain:"biggest_gain", decline:"biggest_loss", watchlist:"high_sales_30d",
+  };
+  const rawKind = String(row.story_kind);
+  const storyKind = legacyKinds[rawKind] ?? rawKind as MarketStory["storyKind"];
+  const meta = row.market_meta && typeof row.market_meta === "object" ? row.market_meta as Record<string,unknown> : {};
+  const gradePrices = Array.isArray(meta.gradePrices)
+    ? meta.gradePrices.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const grade = String((item as Record<string,unknown>).grade ?? "");
+        const price = Number((item as Record<string,unknown>).price ?? 0);
+        return grade && Number.isFinite(price) && price > 0 ? [{ grade,price }] : [];
+      })
+    : [];
+  const recentSale = meta.recentSale && typeof meta.recentSale === "object"
+    ? meta.recentSale as MarketStory["recentSale"]
+    : undefined;
   const headline = marketHeadline({
-    cardId:String(row.card_id), player:String(row.player), storyKind:row.story_kind as MarketStory["storyKind"],
-    change30d:Number(row.change_30d), sales30d:Number(row.sales_30d), variant,
+    cardId:String(row.card_id), player:String(row.player), storyKind,
+    change30d:Number(row.change_30d), sales30d:Number(row.sales_30d), gradePrices,
+    gradeGapMultiple:Number(meta.gradeGapMultiple ?? 0), salesPaceMultiple:Number(meta.salesPaceMultiple ?? 0),
+    recentSale, variant,
   });
   return {
-    id:String(row.id), type:"market", storyKind:row.story_kind as MarketStory["storyKind"],
+    id:String(row.id), type:"market", storyKind,
     player:String(row.player), sport:String(row.sport), headline, summary:String(row.summary),
     cardId:String(row.card_id), cardTitle:String(row.card_title), imageUrl:String(row.image_url), grade:String(row.grade),
     currentValue:Number(row.current_value), change7d:Number(row.change_7d), change30d:Number(row.change_30d),
     sales7d:Number(row.sales_7d), sales30d:Number(row.sales_30d), confidenceGrade:String(row.confidence_grade),
     freshnessDays:Number(row.freshness_days), chart:Array.isArray(row.chart) ? row.chart.map(Number) : [],
     comps:Array.isArray(row.comps) ? row.comps as MarketStory["comps"] : [],
+    rookie:Boolean(meta.rookie), gradePrices,
+    gradeGapMultiple:Number(meta.gradeGapMultiple ?? 0), salesPaceMultiple:Number(meta.salesPaceMultiple ?? 0),
+    previous23DaySales:Number(meta.previous23DaySales ?? Math.max(0,Number(row.sales_30d) - Number(row.sales_7d))),
+    recentSale,
     updatedAt:new Date(String(row.updated_at)).toISOString(), demo:Boolean(row.demo),
   };
 }
