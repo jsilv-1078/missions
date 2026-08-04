@@ -272,7 +272,7 @@ async function enrichCandidate(card: Candidate) {
   const grade = selected.grade;
   const [fmvResult, compsResult] = await Promise.allSettled([
     selected.fmvPayload ? Promise.resolve(selected.fmvPayload) : cardHedgeFetch<Record<string, unknown>>("/v1/cards/card-fmv", { card_id:card.card_id, grade }),
-    cardHedgeFetch<Record<string, unknown>>("/v1/cards/comps", { card_id:card.card_id, grade, include_raw_prices:true, time_weighted:true }),
+    cardHedgeFetch<Record<string, unknown>>("/v1/cards/comps", { card_id:card.card_id, count:10, grade, include_raw_prices:true, time_weighted:true }),
   ]);
 
   const fmvPayload = fmvResult.status === "fulfilled" ? fmvResult.value : {};
