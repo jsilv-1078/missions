@@ -6,10 +6,38 @@ export type MarketStoryKind =
   | "grade_gap"
   | "sales_surge"
   | "rookie_watch"
-  | "vintage_mover";
+  | "vintage_mover"
+  | "player_snapshot"
+  | "price_volume"
+  | "market_matchup"
+  | "daily_market_brief";
 
 export type MarketGradePrice = { grade: string; price: number };
 export type MarketSale = { date: string; price: number; venue?: string };
+
+export type MarketInsightItem = {
+  id: string;
+  player: string;
+  sport: string;
+  cardTitle: string;
+  imageUrl: string;
+  grade: string;
+  currentValue: number;
+  change30d: number;
+  sales30d: number;
+};
+
+export type MarketInsight = {
+  label?: string;
+  volumePercentile?: number;
+  cardsTracked?: number;
+  risingCount?: number;
+  fallingCount?: number;
+  flatCount?: number;
+  totalSales30d?: number;
+  averageChange30d?: number;
+  items?: MarketInsightItem[];
+};
 
 export type MarketStory = {
   id: string;
@@ -39,6 +67,7 @@ export type MarketStory = {
   salesPaceMultiple: number;
   previous23DaySales: number;
   recentSale?: MarketSale;
+  insight?: MarketInsight;
   updatedAt: string;
   demo: boolean;
 };
