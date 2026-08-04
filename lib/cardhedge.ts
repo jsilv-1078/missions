@@ -34,14 +34,24 @@ const VINTAGE_SEARCH_YEARS = [
   "1969","1968","1965","1963","1961","1960","1959","1957",
   "1956","1955","1954","1952","1951","1948","1933","1909",
 ];
-const RESULTS_PER_BUCKET = 3;
+const RESULTS_PER_BUCKET = 6;
 const GRADE_PREMIUM_POOL_SIZE = 20;
-const GRADE_PREMIUM_CANDIDATES_PER_CATEGORY = 4;
+const GRADE_PREMIUM_CANDIDATES_PER_CATEGORY = 6;
 const TARGET_GRADE_PREMIUM_STORIES = 14;
 const VINTAGE_RESULTS_PER_YEAR = 25;
-const MAX_VINTAGE_CANDIDATES = 16;
+const MAX_VINTAGE_CANDIDATES = 18;
 const SEARCH_CONCURRENCY = 6;
-const MAX_PUBLISHED_STORIES = 48;
+const CATEGORY_TARGETS = {
+  Football:18,
+  Baseball:18,
+  Basketball:18,
+  Hockey:8,
+  Soccer:8,
+  "Pokémon":12,
+  Vintage:10,
+} as const;
+type TargetCategory = keyof typeof CATEGORY_TARGETS;
+const MAX_PUBLISHED_STORIES = Object.values(CATEGORY_TARGETS).reduce((sum,target) => sum + target,0);
 const ENRICH_CONCURRENCY = 8;
 const MIN_30_DAY_SALES = 5;
 const MIN_VINTAGE_30_DAY_SALES = 3;
@@ -61,6 +71,7 @@ const TRUSTED_CONFIDENCE = new Set(["A","B"]);
 const STORY_KINDS:MarketStoryKind[] = [
   "high_sales_30d","vintage_mover","biggest_gain","biggest_loss","recent_sale","sales_surge","rookie_watch",
 ];
+const MODERN_STORY_KINDS:MarketStoryKind[] = [...STORY_KINDS.filter((kind) => kind !== "vintage_mover"),"grade_gap"];
 
 export function cardHedgeConfigured() {
   return Boolean(process.env.CARDHEDGE_API_KEY);
@@ -433,6 +444,14 @@ function storyScore(facts: MarketFacts, kind: MarketStoryKind) {
   return facts.salesPaceMultiple;
 }
 
+function targetCategory(facts: Pick<MarketFacts,"cardYear" | "sport">):TargetCategory | null {
+  if (facts.cardYear >= 1800 && facts.cardYear < 1980) return "Vintage";
+  if (facts.sport === "Pokemon" || facts.sport === "Pokémon") return "Pokémon";
+  return Object.prototype.hasOwnProperty.call(CATEGORY_TARGETS,facts.sport)
+    ? facts.sport as TargetCategory
+    : null;
+}
+
 function summaryFor(facts: MarketFacts, kind: MarketStoryKind) {
   const descriptor = facts.cardTitle + " · " + facts.grade + ". ";
   if (kind === "high_sales_30d") return descriptor + facts.sales30d.toLocaleString() + " recorded sales over the last 30 days.";
@@ -465,46 +484,62 @@ function buildStory(facts: MarketFacts, storyKind: MarketStoryKind):MarketStory 
 
 function selectStories(factsList: MarketFacts[]) {
   const chosenIds = new Set<string>();
-  const categoryCounts = new Map<string,number>();
-  const gradePremiumStories:MarketStory[] = [];
-  const otherStories:MarketStory[] = [];
-  const selectForKind = (kind:MarketStoryKind) => {
+  const categories = Object.keys(CATEGORY_TARGETS) as TargetCategory[];
+  const selectedByCategory = new Map<TargetCategory,MarketStory[]>(categories.map((category) => [category,[]]));
+  const selectForKind = (category:TargetCategory,kind:MarketStoryKind) => {
+    const selected = selectedByCategory.get(category) ?? [];
+    if (selected.length >= CATEGORY_TARGETS[category]) return false;
     const options = factsList
-      .filter((facts) => !chosenIds.has(facts.cardId) && facts.eligibleKinds.includes(kind))
-      .sort((a,b) => {
-        const categoryDifference = (categoryCounts.get(a.sport) ?? 0) - (categoryCounts.get(b.sport) ?? 0);
-        return categoryDifference || storyScore(b,kind) - storyScore(a,kind);
-      });
-    const selected = options[0];
-    if (!selected) return null;
-    chosenIds.add(selected.cardId);
-    categoryCounts.set(selected.sport,(categoryCounts.get(selected.sport) ?? 0) + 1);
-    return buildStory(selected,kind);
+      .filter((facts) => !chosenIds.has(facts.cardId) && targetCategory(facts) === category && facts.eligibleKinds.includes(kind))
+      .sort((a,b) => storyScore(b,kind) - storyScore(a,kind));
+    const facts = options[0];
+    if (!facts) return false;
+    chosenIds.add(facts.cardId);
+    selected.push(buildStory(facts,kind));
+    selectedByCategory.set(category,selected);
+    return true;
   };
 
-  while (gradePremiumStories.length < TARGET_GRADE_PREMIUM_STORIES) {
-    const story = selectForKind("grade_gap");
-    if (!story) break;
-    gradePremiumStories.push(story);
-  }
-  while (gradePremiumStories.length + otherStories.length < MAX_PUBLISHED_STORIES) {
-    let added = false;
-    for (const kind of STORY_KINDS) {
-      const story = selectForKind(kind);
-      if (!story) continue;
-      otherStories.push(story);
-      added = true;
-      if (gradePremiumStories.length + otherStories.length === MAX_PUBLISHED_STORIES) break;
+  const modernCategories = categories.filter((category) => category !== "Vintage");
+  let gradePremiumCount = 0;
+  let premiumRoundAdded = true;
+  while (gradePremiumCount < TARGET_GRADE_PREMIUM_STORIES && premiumRoundAdded) {
+    premiumRoundAdded = false;
+    for (const category of modernCategories) {
+      if (gradePremiumCount >= TARGET_GRADE_PREMIUM_STORIES) break;
+      if (!selectForKind(category,"grade_gap")) continue;
+      gradePremiumCount += 1;
+      premiumRoundAdded = true;
     }
-    if (!added) break;
+  }
+
+  for (const category of categories) {
+    const kinds = category === "Vintage" ? ["vintage_mover" as const] : MODERN_STORY_KINDS;
+    let misses = 0;
+    let kindIndex = 0;
+    while ((selectedByCategory.get(category)?.length ?? 0) < CATEGORY_TARGETS[category] && misses < kinds.length) {
+      const kind = kinds[kindIndex % kinds.length];
+      kindIndex += 1;
+      if (selectForKind(category,kind)) {
+        misses = 0;
+      } else {
+        misses += 1;
+      }
+    }
   }
 
   const stories:MarketStory[] = [];
-  let gradeIndex = 0;
-  let otherIndex = 0;
-  while (stories.length < MAX_PUBLISHED_STORIES && (gradeIndex < gradePremiumStories.length || otherIndex < otherStories.length)) {
-    if (otherIndex < otherStories.length) stories.push(otherStories[otherIndex++]);
-    if (stories.length < MAX_PUBLISHED_STORIES && gradeIndex < gradePremiumStories.length) stories.push(gradePremiumStories[gradeIndex++]);
+  let row = 0;
+  while (stories.length < MAX_PUBLISHED_STORIES) {
+    let added = false;
+    for (const category of categories) {
+      const story = selectedByCategory.get(category)?.[row];
+      if (!story) continue;
+      stories.push(story);
+      added = true;
+    }
+    if (!added) break;
+    row += 1;
   }
   return stories;
 }
@@ -581,6 +616,16 @@ export async function syncMarketData() {
       counts[story.storyKind] = (counts[story.storyKind] ?? 0) + 1;
       return counts;
     },{});
+    const categoryCounts = stories.reduce<Record<string,number>>((counts,story) => {
+      const category = targetCategory(story) ?? "Other";
+      counts[category] = (counts[category] ?? 0) + 1;
+      return counts;
+    },{});
+    const categoryShortfalls = (Object.keys(CATEGORY_TARGETS) as TargetCategory[]).reduce<Record<string,number>>((shortfalls,category) => {
+      const shortfall = CATEGORY_TARGETS[category] - (categoryCounts[category] ?? 0);
+      if (shortfall > 0) shortfalls[category] = shortfall;
+      return shortfalls;
+    },{});
     const vintageGradeCounts = stories.filter((story) => story.storyKind === "vintage_mover").reduce<Record<string,number>>((counts,story) => {
       counts[story.grade] = (counts[story.grade] ?? 0) + 1;
       return counts;
@@ -588,11 +633,15 @@ export async function syncMarketData() {
     console.info(JSON.stringify({
       level:"info",message:"Market data quality review",source:"cardhedge",runId,stage:"complete",
       durationMs:Date.now() - startedAt,seen:candidates.length,published:stories.length,rejected:rejected.length,
-      deleted,reasonCounts,typeCounts,vintageGradeCounts,discovery:discovery.stats,
+      deleted,reasonCounts,typeCounts,categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,
+      vintageGradeCounts,discovery:discovery.stats,
     }));
     const message = "Market sync completed: " + stories.length + " published, " + rejected.length + " rejected, " + deleted + " stale removed";
     await finishSync(runId,"success",candidates.length,stories.length,message);
-    return { status:"success", seen:candidates.length, written:stories.length, rejected:rejected.length, deleted, message };
+    return {
+      status:"success",seen:candidates.length,written:stories.length,rejected:rejected.length,deleted,message,
+      categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown market sync error";
     console.error(JSON.stringify({
