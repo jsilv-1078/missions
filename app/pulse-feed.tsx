@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import type { FeedStory, MarketStory, NewsStory } from "@/lib/types";
 
+const FEED_PAGE_SIZE = 12;
+
 function PulseLogo() {
   return <div className="pulse-logo" aria-label="Card Madness Pulse"><Image className="pulse-brand-mark" src="/card-madness-symbol.png" alt="" width={40} height={50}/><b>PULSE</b></div>;
 }
@@ -130,9 +132,49 @@ function EmptyFeed() {
 }
 
 export function PulseFeed({ initialStories }: { initialStories: FeedStory[] }) {
+  const [stories,setStories] = useState(initialStories);
+  const [hasMore,setHasMore] = useState(initialStories.length === FEED_PAGE_SIZE);
+  const [loading,setLoading] = useState(false);
+  const [loadError,setLoadError] = useState(false);
+  const loadingRef = useRef(false);
+
+  async function loadMore() {
+    if (loadingRef.current || !hasMore) return;
+    loadingRef.current = true;
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const response = await fetch("/api/feed?limit=" + FEED_PAGE_SIZE + "&offset=" + stories.length);
+      if (!response.ok) throw new Error("Feed request failed");
+      const result = await response.json() as { stories?:FeedStory[]; meta?:{ hasMore?:boolean } };
+      const incoming = result.stories ?? [];
+      setStories((current) => {
+        const existing = new Set(current.map((story) => story.id));
+        return [...current,...incoming.filter((story) => !existing.has(story.id))];
+      });
+      setHasMore(Boolean(result.meta?.hasMore) && incoming.length > 0);
+    } catch {
+      setLoadError(true);
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+  }
+
+  function handleScroll(event: React.UIEvent<HTMLElement>) {
+    const feed = event.currentTarget;
+    const remaining = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
+    if (remaining < feed.clientHeight * 2) void loadMore();
+  }
+
   return <main className="app-shell">
     <nav className="desktop-nav"><PulseLogo/><div><button className="active">For You</button><button>Market</button><button>News</button></div><a href="/admin/news">News Admin</a></nav>
-    <section className="feed" aria-label="Pulse market and news feed">{initialStories.length ? initialStories.map((story) => <Story key={story.id} story={story}/>) : <EmptyFeed/>}</section>
+    <section className="feed" aria-label="Pulse market and news feed" onScroll={handleScroll}>
+      {stories.length ? stories.map((story) => <Story key={story.id} story={story}/>) : <EmptyFeed/>}
+      {stories.length && (loading || loadError || !hasMore) ? <div className="feed-status">
+        {loading ? <span>Loading more verified stories…</span> : loadError ? <button onClick={loadMore}>Unable to load more · Tap to retry</button> : <span>You’re caught up.</span>}
+      </div> : null}
+    </section>
     <nav className="mobile-nav"><button className="active"><b>⌁</b><span>Pulse</span></button><button><b>○</b><span>Compete</span></button><button><b>□</b><span>Collection</span></button><button><b>◇</b><span>Shop</span></button><button><b>●</b><span>Profile</span></button></nav>
   </main>;
 }

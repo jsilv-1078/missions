@@ -66,6 +66,12 @@ async function initializeSchema() {
   await sql.query("CREATE INDEX IF NOT EXISTS news_stories_published_idx ON news_stories(published_at DESC)");
   await sql.query("DELETE FROM market_stories WHERE demo=TRUE");
   await sql.query("DELETE FROM news_stories WHERE demo=TRUE");
+  await sql.query([
+    "DELETE FROM market_stories WHERE",
+    "ABS(change_7d) > 200 OR ABS(change_30d) > 300 OR",
+    "current_value < 0.5 OR current_value > 1000000 OR",
+    "UPPER(confidence_grade) NOT IN ('A','B') OR freshness_days > 30",
+  ].join(" "));
 }
 
 export async function upsertMarketStory(story: MarketStory, initialize = true) {
@@ -86,6 +92,17 @@ export async function upsertMarketStory(story: MarketStory, initialize = true) {
     story.sales7d, story.sales30d, story.confidenceGrade, story.freshnessDays, JSON.stringify(story.chart),
     JSON.stringify(story.comps), story.updatedAt, story.demo,
   ]);
+}
+
+export async function deleteMarketStoriesExcept(cardIds: string[]) {
+  await ensureSchema();
+  if (!cardIds.length) return 0;
+  const placeholders = cardIds.map((_,index) => "$" + (index + 1)).join(",");
+  const deleted = await getSql().query(
+    "DELETE FROM market_stories WHERE demo=FALSE AND card_id NOT IN (" + placeholders + ") RETURNING id",
+    cardIds,
+  );
+  return deleted.length;
 }
 
 async function upsertNewsStory(story: NewsStory, initialize = true) {
@@ -136,17 +153,16 @@ function interleave(markets: MarketStory[], news: NewsStory[]) {
   return output;
 }
 
-export async function getFeedStories(limit = 30): Promise<FeedStory[]> {
+export async function getFeedStories(limit = 30, offset = 0): Promise<FeedStory[]> {
   if (!databaseConfigured()) return [];
   try {
     await ensureSchema();
-    const marketLimit = Math.max(1, Math.ceil(limit * 0.7));
-    const newsLimit = Math.max(1, limit - marketLimit);
+    const fetchLimit = Math.min(120,Math.max(1,offset + limit));
     const [markets, news] = await Promise.all([
-      getSql().query("SELECT * FROM market_stories ORDER BY updated_at DESC LIMIT $1", [marketLimit]),
-      getSql().query("SELECT * FROM news_stories WHERE status='published' ORDER BY published_at DESC LIMIT $1", [newsLimit]),
+      getSql().query("SELECT * FROM market_stories ORDER BY updated_at DESC LIMIT $1", [fetchLimit]),
+      getSql().query("SELECT * FROM news_stories WHERE status='published' ORDER BY published_at DESC LIMIT $1", [fetchLimit]),
     ]);
-    return interleave(markets.map(marketRow), news.map(newsRow)).slice(0, limit);
+    return interleave(markets.map(marketRow), news.map(newsRow)).slice(offset,offset + limit);
   } catch (error) {
     console.error("Pulse database read failed", error);
     return [];
