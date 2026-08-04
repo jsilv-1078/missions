@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
+import type { NewsStory } from "@/lib/types";
 
 type Status = { kind:"idle"|"progress"|"success"|"error"; message:string };
 type SyncRun = {
@@ -11,36 +12,116 @@ type SyncRun = {
   startedAt:string;
 };
 
+function localDateTime(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0,16);
+}
+
+function dateLabel(value: string) {
+  return new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",year:"numeric"}).format(new Date(value));
+}
+
 export default function NewsAdmin() {
+  const formRef = useRef<HTMLFormElement>(null);
   const [token,setToken] = useState("");
-  const [publishStatus,setPublishStatus] = useState<Status>({kind:"idle",message:"Enter the admin token to publish a story."});
+  const [publishStatus,setPublishStatus] = useState<Status>({kind:"idle",message:"Enter the admin token to publish or edit a story."});
   const [syncStatus,setSyncStatus] = useState<Status>({kind:"idle",message:"Ready to refresh market data."});
+  const [manageStatus,setManageStatus] = useState<Status>({kind:"idle",message:"Load existing articles to edit or delete them."});
+  const [stories,setStories] = useState<NewsStory[]>([]);
+  const [editing,setEditing] = useState<NewsStory | null>(null);
   const [syncing,setSyncing] = useState(false);
   const [publishing,setPublishing] = useState(false);
+  const [loadingStories,setLoadingStories] = useState(false);
+  const [deletingId,setDeletingId] = useState<string | null>(null);
+
+  async function loadStories(showProgress = true) {
+    if (!token) return;
+    setLoadingStories(true);
+    if (showProgress) setManageStatus({kind:"progress",message:"Loading published articles…"});
+    try {
+      const response = await fetch("/api/admin/news",{
+        headers:{"Authorization":"Bearer " + token},cache:"no-store",
+      });
+      const result = await response.json() as { stories?:NewsStory[]; error?:string };
+      if (!response.ok) {
+        setManageStatus({kind:"error",message:result.error ?? "Unable to load articles"});
+        return;
+      }
+      const articles = result.stories ?? [];
+      setStories(articles);
+      setManageStatus({kind:"success",message:articles.length
+        ? articles.length + " published article" + (articles.length === 1 ? "" : "s") + " loaded."
+        : "No published articles found."});
+    } catch {
+      setManageStatus({kind:"error",message:"The article list could not be loaded. Please try again."});
+    } finally {
+      setLoadingStories(false);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const body = Object.fromEntries(form.entries());
+    const body:Record<string,FormDataEntryValue> = Object.fromEntries(form.entries());
     setPublishing(true);
-    setPublishStatus({kind:"progress",message:"Publishing…"});
+    setPublishStatus({kind:"progress",message:editing ? "Saving changes…" : "Publishing…"});
     try {
+      body.publishedAt = new Date(String(body.publishedAt)).toISOString();
+      if (editing) body.id = editing.id;
       const response = await fetch("/api/admin/news",{
-        method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer " + token},
+        method:editing ? "PATCH" : "POST",headers:{"Content-Type":"application/json","Authorization":"Bearer " + token},
         body:JSON.stringify(body),
       });
       const result = await response.json();
       if (!response.ok) {
-        setPublishStatus({kind:"error",message:result.error ?? "Unable to publish"});
+        setPublishStatus({kind:"error",message:result.error ?? (editing ? "Unable to save changes" : "Unable to publish")});
         return;
       }
       formElement.reset();
-      setPublishStatus({kind:"success",message:"Story published to the Pulse feed."});
+      setEditing(null);
+      setPublishStatus({kind:"success",message:editing ? "Article changes saved." : "Story published to the Pulse feed."});
+      await loadStories(false);
     } catch {
-      setPublishStatus({kind:"error",message:"The publish request could not be completed. Please try again."});
+      setPublishStatus({kind:"error",message:"The save request could not be completed. Please try again."});
     } finally {
       setPublishing(false);
+    }
+  }
+
+  function beginEdit(story: NewsStory) {
+    setEditing(story);
+    setPublishStatus({kind:"idle",message:"Update the article fields, then save your changes."});
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setPublishStatus({kind:"idle",message:"Edit canceled. The form is ready for a new article."});
+  }
+
+  async function removeStory(story: NewsStory) {
+    if (!window.confirm("Delete ‘" + story.headline + "’ from Pulse? This cannot be undone.")) return;
+    setDeletingId(story.id);
+    setManageStatus({kind:"progress",message:"Deleting article…"});
+    try {
+      const response = await fetch("/api/admin/news?id=" + encodeURIComponent(story.id),{
+        method:"DELETE",headers:{"Authorization":"Bearer " + token},
+      });
+      const result = await response.json() as { error?:string };
+      if (!response.ok) {
+        setManageStatus({kind:"error",message:result.error ?? "Unable to delete article"});
+        return;
+      }
+      setStories((current) => current.filter((article) => article.id !== story.id));
+      if (editing?.id === story.id) setEditing(null);
+      setManageStatus({kind:"success",message:"Article deleted from Pulse."});
+    } catch {
+      setManageStatus({kind:"error",message:"The delete request could not be completed. Please try again."});
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -82,17 +163,26 @@ export default function NewsAdmin() {
 
   return <main className="admin-shell">
     <header><a href="/">← Back to Pulse</a><div><span>CM PULSE</span><h1>News Publisher</h1><p>Add a curated article. Pulse stores the source link and never copies the full article.</p></div></header>
-    <section className="admin-card token-card"><label>Admin token<input type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="Required to publish"/></label><button onClick={sync} disabled={!token || syncing}>{syncing ? "Syncing…" : "Run Card Hedge sync"}</button><p aria-live="polite" className={"form-status " + syncStatus.kind}>{syncStatus.message}</p></section>
-    <form className="admin-card news-form" onSubmit={submit}>
-      <div className="two-col"><label>Article URL<input name="articleUrl" type="url" required placeholder="https://…"/></label><label>Source<input name="source" required placeholder="Publisher"/></label></div>
-      <label>Headline<input name="headline" required maxLength={180} placeholder="What happened?"/></label>
-      <label>One-sentence summary<textarea name="summary" required maxLength={320} rows={3} placeholder="Why should a collector care?"/></label>
-      <div className="two-col"><label>Player<input name="player" required placeholder="Player name"/></label><label>Sport<select name="sport" defaultValue="Baseball"><option>Baseball</option><option>Basketball</option><option>Football</option><option>Hockey</option><option>Hobby</option></select></label></div>
-      <div className="two-col"><label>Category<select name="category" defaultValue="Player news"><option>Player news</option><option>Milestone</option><option>Injury</option><option>Transaction</option><option>Card sale</option><option>Hobby</option></select></label><label>Published<input name="publishedAt" type="datetime-local" required/></label></div>
-      <label>Player or approved article image URL<input name="imageUrl" type="url" required placeholder="https://…"/></label>
-      <label>Related Card Hedge card ID <small>Optional</small><input name="relatedCardId" placeholder="Connect market context later"/></label>
-      <button className="publish-button" disabled={!token || publishing}>{publishing ? "Publishing…" : "Publish to Pulse"}</button>
+    <section className="admin-card token-card"><label>Admin token<input type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder="Required for admin actions"/></label><button onClick={sync} disabled={!token || syncing}>{syncing ? "Syncing…" : "Run Card Hedge sync"}</button><p aria-live="polite" className={"form-status " + syncStatus.kind}>{syncStatus.message}</p></section>
+    <form ref={formRef} key={editing?.id ?? "new"} className="admin-card news-form" onSubmit={submit}>
+      <div className="admin-form-heading"><div><span>{editing ? "EDITING ARTICLE" : "NEW ARTICLE"}</span><h2>{editing ? "Update story" : "Publish to Pulse"}</h2></div>{editing ? <button type="button" onClick={cancelEdit}>Cancel edit</button> : null}</div>
+      <div className="two-col"><label>Article URL<input name="articleUrl" type="url" required defaultValue={editing?.articleUrl} placeholder="https://…"/></label><label>Source<input name="source" required defaultValue={editing?.source} placeholder="Publisher"/></label></div>
+      <label>Headline<input name="headline" required maxLength={180} defaultValue={editing?.headline} placeholder="What happened?"/></label>
+      <label>One-sentence summary<textarea name="summary" required maxLength={320} rows={3} defaultValue={editing?.summary} placeholder="Why should a collector care?"/></label>
+      <div className="two-col"><label>Player<input name="player" required defaultValue={editing?.player} placeholder="Player name"/></label><label>Sport<select name="sport" defaultValue={editing?.sport ?? "Baseball"}><option>Baseball</option><option>Basketball</option><option>Football</option><option>Hockey</option><option>Soccer</option><option>Pokémon</option><option>Hobby</option></select></label></div>
+      <div className="two-col"><label>Category<select name="category" defaultValue={editing?.category ?? "Player news"}><option>Player news</option><option>Milestone</option><option>Injury</option><option>Transaction</option><option>Card sale</option><option>Hobby</option></select></label><label>Published<input name="publishedAt" type="datetime-local" required defaultValue={editing ? localDateTime(editing.publishedAt) : ""}/></label></div>
+      <label>Player or approved article image URL<input name="imageUrl" type="url" required defaultValue={editing?.imageUrl} placeholder="https://…"/></label>
+      <label>Related Card Hedge card ID <small>Optional</small><input name="relatedCardId" defaultValue={editing?.relatedCardId} placeholder="Connect market context later"/></label>
+      <button className="publish-button" disabled={!token || publishing}>{publishing ? (editing ? "Saving…" : "Publishing…") : (editing ? "Save article changes" : "Publish to Pulse")}</button>
       <p aria-live="polite" className={"form-status " + publishStatus.kind}>{publishStatus.message}</p>
     </form>
+    <section className="admin-card article-manager">
+      <div className="article-manager-heading"><div><span>ARTICLE LIBRARY</span><h2>Existing articles</h2></div><button onClick={() => void loadStories()} disabled={!token || loadingStories}>{loadingStories ? "Loading…" : stories.length ? "Refresh" : "Load articles"}</button></div>
+      <p aria-live="polite" className={"form-status " + manageStatus.kind}>{manageStatus.message}</p>
+      {stories.length ? <div className="admin-article-list">{stories.map((story) => <article className="admin-article" key={story.id}>
+        <div><span>{story.category} · {story.source}</span><h3>{story.headline}</h3><p>{story.player} · {story.sport} · {dateLabel(story.publishedAt)}</p><a href={story.articleUrl} target="_blank" rel="noreferrer">Open source article ↗</a></div>
+        <div className="admin-article-actions"><button onClick={() => beginEdit(story)}>Edit</button><button className="delete" onClick={() => void removeStory(story)} disabled={deletingId === story.id}>{deletingId === story.id ? "Deleting…" : "Delete"}</button></div>
+      </article>)}</div> : null}
+    </section>
   </main>;
 }
