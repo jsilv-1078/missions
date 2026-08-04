@@ -41,7 +41,7 @@ export function marketHeadline({
       "Active trading accompanies a " + change + "% gain for " + player,
       "Collectors trade " + player + " " + sales + " times as price climbs",
       "High volume, higher price: " + player + " gains " + change + "%",
-      player + " moves " + change + "% higher in a busy market",
+      player + " moves " + change + "% higher during busy trading",
       sales + " sales come with a " + change + "% rise for " + player,
       "Trading stays brisk as " + player + " climbs " + change + "%",
       player + " posts heavy volume and a " + change + "% gain",
@@ -52,7 +52,7 @@ export function marketHeadline({
       "Active trading accompanies a " + change + "% decline for " + player,
       "Collectors trade " + player + " " + sales + " times as price slips",
       "High volume, lower price: " + player + " drops " + change + "%",
-      player + " moves " + change + "% lower in a busy market",
+      player + " moves " + change + "% lower during busy trading",
       sales + " sales come with a " + change + "% decline for " + player,
       "Trading stays brisk as " + player + " falls " + change + "%",
       player + " posts heavy volume but loses " + change + "%",
@@ -98,7 +98,7 @@ export function marketHeadline({
       player + " RC stays active and moves " + change + "% higher",
       sales + " monthly sales accompany a " + change + "% rookie gain",
       "Collectors trade " + player + " as the rookie rises " + change + "%",
-      player + " rookie market advances " + change + "% over 30 days",
+      player + " rookie card advances " + change + "% over 30 days",
     ],variant);
 
     if (change30d < -0.05) return stableChoice(seed,[
@@ -107,7 +107,7 @@ export function marketHeadline({
       player + " RC stays active but moves " + change + "% lower",
       sales + " monthly sales accompany a " + change + "% rookie decline",
       "Collectors trade " + player + " as the rookie falls " + change + "%",
-      player + " rookie market retreats " + change + "% over 30 days",
+      player + " rookie card retreats " + change + "% over 30 days",
     ],variant);
 
     return stableChoice(seed,[
@@ -125,7 +125,7 @@ export function marketHeadline({
       year + " " + player + " card moves " + direction + " " + change + "%",
       "Vintage watch: " + player + " shifts " + change + "%",
       player + "’s " + year + " card makes a vintage move",
-      "Pre-1980 market shifts for " + player,
+      "A pre-1980 card shifts for " + player,
       year + " " + player + " issue changes " + change + "%",
       "Collectors track a new move in this " + player + " vintage card",
     ],variant);
@@ -137,7 +137,7 @@ export function marketHeadline({
     player + " card cools with a " + change + "% decline",
     "Current FMV falls " + change + "% for " + player,
     player + " card trends lower this month",
-    "Market price retreats for this " + player + " card",
+    "This " + player + " card retreats in price",
   ],variant);
 
   return stableChoice(seed,[
@@ -146,6 +146,6 @@ export function marketHeadline({
     "Thirty-day price moves higher for " + player,
     "Current FMV rises " + change + "% for " + player,
     player + " card trends higher this month",
-    "Market price advances for this " + player + " card",
+    "This " + player + " card advances in price",
   ],variant);
 }
