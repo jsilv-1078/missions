@@ -71,7 +71,7 @@ export function marketHeadline({
 
   if (storyKind === "grade_gap") {
     const high = gradePrices[0]?.grade ?? "top grade";
-    const low = gradePrices[1]?.grade ?? "lower grade";
+    const low = gradePrices[gradePrices.length - 1]?.grade ?? "lower grade";
     return stableChoice(seed,[
       high + " commands " + gradeGapMultiple.toFixed(1) + "× the " + low,
       player + " grade gap reaches " + gradeGapMultiple.toFixed(1) + "×",

@@ -26,7 +26,7 @@ const MARKET_FORMATS:Record<MarketStoryKind,{ label:string;icon:string;cue:strin
   biggest_gain:{ label:"BIGGEST PRICE GAIN",icon:"↑",cue:"PRICE TREND & COMPS" },
   biggest_loss:{ label:"BIGGEST PRICE LOSS",icon:"↓",cue:"PRICE TREND & COMPS" },
   recent_sale:{ label:"SOLD TODAY",icon:"✓",cue:"SALE RECEIPT & COMPS" },
-  grade_gap:{ label:"GRADE GAP",icon:"G",cue:"COMPARE GRADES & PRICES" },
+  grade_gap:{ label:"GRADING PREMIUM",icon:"G",cue:"PSA 10, PSA 9 & RAW" },
   sales_surge:{ label:"SALES SURGE",icon:"⚡",cue:"PACE & SALES BREAKDOWN" },
   rookie_watch:{ label:"ROOKIE WATCH",icon:"RC",cue:"ROOKIE MARKET DETAILS" },
   vintage_mover:{ label:"VINTAGE MOVER",icon:"V",cue:"ERA, TREND & COMPS" },
@@ -57,6 +57,14 @@ function GradeStamp({ grade }: { grade: string }) {
   return <div className="market-grade"><span>CARD GRADE</span><strong>{grade}</strong></div>;
 }
 
+function gradePremiumLabel(prices: MarketStory["gradePrices"], index: number) {
+  const current = prices[index];
+  const next = prices[index + 1];
+  if (!current || !next || next.price <= 0) return null;
+  const premium = Math.round((current.price / next.price - 1) * 100);
+  return "+" + premium.toLocaleString() + "% vs " + next.grade;
+}
+
 function MarketFrontVisual({ story }: { story: MarketStory }) {
   if (story.storyKind === "high_sales_30d") return <div className="market-stage volume-stage">
     <CardImage story={story}/><div className="volume-tally"><GradeStamp grade={story.grade}/><small>RECORDED SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>30 DAYS</b><span>{story.sales7d.toLocaleString()} in the last 7 days</span></div>
@@ -70,8 +78,8 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
   if (story.storyKind === "recent_sale") return <div className="market-stage sale-stage"><CardImage story={story}/><div className="sale-ticket"><GradeStamp grade={story.grade}/><small>CONFIRMED COMP</small><b>SOLD TODAY</b><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><span>{story.recentSale?.venue ?? "Recorded sale"}</span><em>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</em></div></div>;
 
   if (story.storyKind === "grade_gap") {
-    const prices = story.gradePrices.length === 2 ? story.gradePrices : [{ grade:story.grade,price:story.currentValue }];
-    return <div className="market-stage gap-stage"><CardImage story={story}/><div className="grade-ladder"><GradeStamp grade={story.grade}/><small>LATEST GRADE PRICES</small>{prices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span>{item.grade}</span><strong>{currency(item.price)}</strong></div>)}<b>{story.gradeGapMultiple.toFixed(1)}× PREMIUM</b></div></div>;
+    const prices = story.gradePrices.length >= 2 ? story.gradePrices : [{ grade:story.grade,price:story.currentValue }];
+    return <div className="market-stage gap-stage"><CardImage story={story}/><div className="grade-ladder"><small>LATEST GRADE PRICES</small>{prices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span>{item.grade}</span><strong>{currency(item.price)}</strong>{gradePremiumLabel(prices,index) ? <em>{gradePremiumLabel(prices,index)}</em> : null}</div>)}<b>{prices[0].grade} IS {story.gradeGapMultiple.toFixed(1)}× {prices[prices.length - 1].grade}</b></div></div>;
   }
 
   if (story.storyKind === "sales_surge") return <div className="market-stage surge-stage"><CardImage story={story}/><div className="surge-tally"><GradeStamp grade={story.grade}/><small>SALES PACE</small><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><b>FASTER</b><div><span><strong>{story.sales7d}</strong>LAST 7D</span><i>→</i><span><strong>{story.previous23DaySales}</strong>PRIOR 23D</span></div></div></div>;
@@ -129,7 +137,7 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
     return <><div className="volume-detail"><span>30-DAY SALES</span><strong>{story.sales30d.toLocaleString()}</strong><b>{story.sales7d} in the last 7 days</b><small>{recentShare}% of monthly sales occurred this week</small></div><MetricGrid story={story}/></>;
   }
   if (story.storyKind === "recent_sale") return <><div className="receipt-detail"><span>CONFIRMED SALE · {story.grade}</span><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><div><b>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</b><small>{story.recentSale?.venue ?? "Recorded comp"}</small></div><p>Current FMV <b>{currency(story.currentValue)}</b></p></div><ComparableSales story={story}/></>;
-  if (story.storyKind === "grade_gap") return <><div className="gap-detail"><span>GRADE PRICE LADDER</span><strong>{story.gradeGapMultiple.toFixed(1)}×</strong><small>PREMIUM BETWEEN GRADES</small>{story.gradePrices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><b>{item.grade}</b><strong>{currency(item.price)}</strong></div>)}</div><div className="detail-price compact"><span>CURRENT FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong></div></>;
+  if (story.storyKind === "grade_gap") return <><div className="gap-detail"><span>GRADING PRICE LADDER</span><strong>{story.gradeGapMultiple.toFixed(1)}×</strong><small>{story.gradePrices[0]?.grade} TO {story.gradePrices[story.gradePrices.length - 1]?.grade} PREMIUM</small>{story.gradePrices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span><b>{item.grade}</b>{gradePremiumLabel(story.gradePrices,index) ? <small>{gradePremiumLabel(story.gradePrices,index)}</small> : null}</span><strong>{currency(item.price)}</strong></div>)}</div><div className="detail-price compact"><span>CURRENT FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong></div></>;
   if (story.storyKind === "sales_surge") {
     const recentDaily = story.sales7d / 7;
     const priorDaily = story.previous23DaySales / 23;
