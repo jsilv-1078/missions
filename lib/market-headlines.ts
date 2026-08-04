@@ -35,32 +35,36 @@ export function marketHeadline({
   const sales = Math.max(0,Math.round(sales30d)).toLocaleString("en-US");
   const seed = cardId + ":" + storyKind;
 
-  if (storyKind === "high_sales_30d") return stableChoice(seed,[
-    player + " card records " + sales + " sales in 30 days",
-    player + " card ranks among the market’s most active",
-    "Collectors keep trading this " + player + " card",
-    "Trading stays brisk for this " + player + " card",
-    player + " card keeps changing hands",
-    player + " card stands out for sales volume",
-    sales + " monthly sales put " + player + " in focus",
-    "Market activity builds around this " + player + " card",
-    player + " draws attention with " + sales + " monthly sales",
-    "This " + player + " card is seeing an active market",
-    player + " posts one of the feed’s stronger sales totals",
-    "Sales volume keeps " + player + " on collectors’ radar",
-    player + " card logs steady secondary-market action",
-    "Collectors completed " + sales + " sales of this " + player + " card",
-    player + " emerges as a frequently traded card",
-    "A busy month puts this " + player + " card in focus",
-    player + " card shows sustained trading activity",
-    sales + " sales make this " + player + " card one to watch",
-    "Trading volume separates this " + player + " card",
-    player + " remains active across the card market",
-    "This " + player + " card posts notable monthly volume",
-    "Frequent sales keep " + player + " in the market conversation",
-    player + " card sees consistent collector turnover",
-    "The market stays busy around this " + player + " card",
-  ],variant);
+  if (storyKind === "high_sales_30d") {
+    if (change30d > 0.05) return stableChoice(seed,[
+      player + " rises " + change + "% amid " + sales + " monthly sales",
+      "Active trading accompanies a " + change + "% gain for " + player,
+      "Collectors trade " + player + " " + sales + " times as price climbs",
+      "High volume, higher price: " + player + " gains " + change + "%",
+      player + " moves " + change + "% higher in a busy market",
+      sales + " sales come with a " + change + "% rise for " + player,
+      "Trading stays brisk as " + player + " climbs " + change + "%",
+      player + " posts heavy volume and a " + change + "% gain",
+    ],variant);
+
+    if (change30d < -0.05) return stableChoice(seed,[
+      player + " falls " + change + "% amid " + sales + " monthly sales",
+      "Active trading accompanies a " + change + "% decline for " + player,
+      "Collectors trade " + player + " " + sales + " times as price slips",
+      "High volume, lower price: " + player + " drops " + change + "%",
+      player + " moves " + change + "% lower in a busy market",
+      sales + " sales come with a " + change + "% decline for " + player,
+      "Trading stays brisk as " + player + " falls " + change + "%",
+      player + " posts heavy volume but loses " + change + "%",
+    ],variant);
+
+    return stableChoice(seed,[
+      player + " stays flat amid " + sales + " monthly sales",
+      "Active trading leaves " + player + " nearly unchanged",
+      sales + " sales keep " + player + " busy while price holds",
+      player + " posts heavy volume with little price movement",
+    ],variant);
+  }
 
   if (storyKind === "recent_sale" && recentSale) return stableChoice(seed,[
     player + " card sells today for " + currency(recentSale.price),
