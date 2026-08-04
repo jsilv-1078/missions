@@ -1,4 +1,5 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { buildAutomatedMarketStories } from "./market-insights";
 import { marketHeadline } from "./market-headlines";
 import type { FeedStory, MarketStory, NewArticleInput, NewsStory } from "./types";
 
@@ -219,7 +220,9 @@ export async function getFeedStories(limit = 30, offset = 0): Promise<FeedStory[
       getSql().query("SELECT * FROM market_stories ORDER BY updated_at DESC LIMIT $1", [fetchLimit]),
       getSql().query("SELECT * FROM news_stories WHERE status='published' ORDER BY published_at DESC LIMIT $1", [fetchLimit]),
     ]);
-    return interleave(markets.map((row,index) => marketRow(row,index)), news.map(newsRow)).slice(offset,offset + limit);
+    const marketStories = markets.map((row,index) => marketRow(row,index));
+    const automatedStories = buildAutomatedMarketStories(marketStories);
+    return interleave([...automatedStories,...marketStories], news.map(newsRow)).slice(offset,offset + limit);
   } catch (error) {
     console.error("Pulse database read failed", error);
     return [];
