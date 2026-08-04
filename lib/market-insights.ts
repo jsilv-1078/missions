@@ -53,44 +53,6 @@ function ordinal(value: number) {
   return `${value}th`;
 }
 
-function dailyBrief(markets: MarketStory[]) {
-  if (!markets.length) return [];
-  const rising = markets.filter((story) => direction(story.change30d) === "rising");
-  const falling = markets.filter((story) => direction(story.change30d) === "falling");
-  const flat = markets.length - rising.length - falling.length;
-  const totalSales = markets.reduce((sum,story) => sum + story.sales30d,0);
-  const mostTraded = [...markets].sort((a,b) => b.sales30d - a.sales30d)[0];
-  const topGainer = [...markets].sort((a,b) => b.change30d - a.change30d)[0];
-  const largestDecline = [...markets].sort((a,b) => a.change30d - b.change30d)[0];
-  const leaders = [topGainer,largestDecline,mostTraded].filter((story,index,list) =>
-    list.findIndex((candidate) => candidate.cardId === story.cardId) === index,
-  );
-  const headline = rising.length > falling.length
-    ? `Pulse market leans higher: ${rising.length} of ${markets.length} tracked cards rising`
-    : falling.length > rising.length
-      ? `Pulse market leans lower: ${falling.length} of ${markets.length} tracked cards falling`
-      : `Pulse market is split: ${rising.length} rising and ${falling.length} falling`;
-  const dateKey = new Date().toISOString().slice(0,10);
-  return [{
-    ...mostTraded,
-    id:`auto-daily-brief-${dateKey}`,
-    cardId:`auto-daily-brief-${dateKey}`,
-    storyKind:"daily_market_brief" as const,
-    player:"Pulse Market",
-    headline,
-    cardTitle:`${markets.length} real card markets · ${totalSales.toLocaleString()} recorded 30-day sales`,
-    summary:`This brief summarizes the ${markets.length} verified standalone card records currently shown in Pulse. It measures price direction and recorded sales within this tracked set, not the entire collectibles market.`,
-    insight:{
-      cardsTracked:markets.length,
-      risingCount:rising.length,
-      fallingCount:falling.length,
-      flatCount:flat,
-      totalSales30d:totalSales,
-      items:leaders.map(item),
-    },
-  }];
-}
-
 function playerSnapshots(markets: MarketStory[]) {
   const groups = new Map<string,MarketStory[]>();
   for (const story of markets) {
@@ -200,7 +162,7 @@ function marketMatchups(markets: MarketStory[]) {
       id:`auto-matchup-${slug(candidate.lead.sport)}-${candidate.lead.cardId}-${candidate.challenger.cardId}`,
       cardId:`auto-matchup-${slug(candidate.lead.sport)}-${candidate.lead.cardId}-${candidate.challenger.cardId}`,
       storyKind:"market_matchup" as const,
-      headline:`${candidate.lead.player} vs. ${candidate.challenger.player}: two comparable ${candidate.lead.grade} cards`,
+      headline:`${candidate.lead.player} vs. ${candidate.challenger.player}`,
       cardTitle:`${candidate.lead.grade} · ${candidate.lead.sales30d.toLocaleString()} vs. ${candidate.challenger.sales30d.toLocaleString()} sales · ${volumeGap}% volume gap`,
       summary:`This matchup compares two verified ${candidate.lead.sport} cards in the same ${candidate.lead.grade} grade with similar recorded 30-day sales volume. It compares value and price direction; it is not a recommendation to buy or sell.`,
       insight:{items:[item(candidate.lead),item(candidate.challenger)]},
@@ -216,7 +178,6 @@ export function buildAutomatedMarketStories(markets: MarketStory[]) {
   const matchupCardIds = new Set(matchups.flatMap((story) => story.insight?.items?.map((market) => market.id) ?? []));
   const standalone = verified.filter((story) => !matchupCardIds.has(story.cardId));
   return [
-    ...dailyBrief(standalone),
     ...playerSnapshots(standalone),
     ...priceVolumeSignals(standalone),
     ...matchups,
