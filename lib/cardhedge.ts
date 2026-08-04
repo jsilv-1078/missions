@@ -16,11 +16,12 @@ type CardSearchItem = {
   gain_30day?: number;
   "7 Day Sales"?: number;
   "30 Day Sales"?: number;
-  prices?: Array<{ grade: string; price: string }>;
+  prices?: Array<{ grade: string; price: string | number }>;
 };
 
 type DiscoveryKind = "high_sales_30d" | "biggest_gain" | "biggest_loss" | "rookie_watch" | "vintage_mover";
 type Candidate = CardSearchItem & { discoveryKinds: DiscoveryKind[] };
+type GradeSelection = { grade:string;price:number;fmvPayload?:Record<string,unknown> };
 
 type MarketFacts = Omit<MarketStory,"id" | "type" | "storyKind" | "headline" | "summary" | "demo"> & {
   eligibleKinds: MarketStoryKind[];
@@ -95,12 +96,66 @@ function cardYear(card: CardSearchItem) {
   return yearFrom(card.set) || yearFrom(card.description);
 }
 
-function pickGrade(card: CardSearchItem) {
+function pickGrade(card: CardSearchItem):GradeSelection | undefined {
   const prices = card.prices ?? [];
-  return prices.find((item) => item.grade === "PSA 10")
+  const selected = prices.find((item) => item.grade === "PSA 10")
     ?? prices.find((item) => item.grade === "PSA 9")
     ?? prices.find((item) => item.grade === "Raw")
     ?? prices[0];
+  return selected ? { grade:selected.grade,price:Number(selected.price ?? 0) } : undefined;
+}
+
+function gradeValue(label: string) {
+  const match = label.match(/\b(\d+(?:\.\d+)?)\b/);
+  return match ? Number(match[1]) : -1;
+}
+
+function vintageGradePriority(label: string) {
+  const upper = label.toUpperCase();
+  const value = gradeValue(upper);
+  const provider = upper.startsWith("PSA ") ? 0
+    : upper.startsWith("SGC ") ? 2
+    : upper.startsWith("BGS ") ? 4
+    : upper.startsWith("CGC ") ? 6
+    : 8;
+  if (value > 0 && value <= 8) return (8 - value) * 10 + provider;
+  if (value > 8) return 120 + (10 - value) * 10 + provider;
+  if (upper === "RAW") return 240;
+  return 300;
+}
+
+function vintageGradeCandidates(card: CardSearchItem):GradeSelection[] {
+  return parseGradePrices(card)
+    .map((item) => ({ grade:item.grade,price:item.price }))
+    .sort((a,b) => vintageGradePriority(a.grade) - vintageGradePriority(b.grade));
+}
+
+async function pickVintageGrade(card: Candidate):Promise<GradeSelection | undefined> {
+  const candidates = vintageGradeCandidates(card);
+  if (!candidates.length) return undefined;
+  try {
+    const payload = await cardHedgeFetch<{ results?:Array<Record<string,unknown>> }>("/v1/cards/card-fmv-batch",{
+      items:candidates.map((item) => ({ card_id:card.card_id,grade:item.grade })),
+    });
+    const results = payload.results ?? [];
+    for (const candidate of candidates) {
+      const fmv = results.find((item) => String(item.grade ?? item.grade_label ?? "").toUpperCase() === candidate.grade.toUpperCase());
+      if (!fmv) continue;
+      const currentValue = Number(fmv.price ?? 0);
+      const confidenceGrade = String(fmv.confidence_grade ?? "N/A").toUpperCase();
+      const freshnessDays = Number(fmv.freshness_days ?? Number.POSITIVE_INFINITY);
+      if (!validPrice(currentValue) || !TRUSTED_CONFIDENCE.has(confidenceGrade)) continue;
+      if (!Number.isFinite(freshnessDays) || freshnessDays > MAX_FRESHNESS_DAYS) continue;
+      if (validPrice(candidate.price) && !withinPriceFactor(currentValue,candidate.price)) continue;
+      return { ...candidate,fmvPayload:fmv };
+    }
+    return undefined;
+  } catch (error) {
+    console.warn("[cardhedge] vintage grade batch lookup failed",{
+      cardId:card.card_id,error:error instanceof Error ? error.message : "Unknown error",
+    });
+    return candidates[0];
+  }
 }
 
 function parseHistory(payload: unknown) {
@@ -175,48 +230,64 @@ function withinPriceFactor(value: number, reference: number) {
   return ratio >= 1 / MAX_PRICE_FACTOR && ratio <= MAX_PRICE_FACTOR;
 }
 
+function historyChange(history: Array<{date:string;price:number}>, fallback: number, days?: number) {
+  let relevant = history;
+  if (days && history.length > 1) {
+    const latest = Math.max(...history.map((item) => Date.parse(item.date)).filter(Number.isFinite));
+    if (Number.isFinite(latest)) relevant = history.filter((item) => Date.parse(item.date) >= latest - days * 86400000);
+  }
+  if (relevant.length < 2) return fallback;
+  const first = relevant[0].price;
+  const last = relevant[relevant.length - 1].price;
+  const change = first > 0 ? ((last - first) / first) * 100 : fallback;
+  return Number.isFinite(change) ? change : fallback;
+}
+
 function rejection(card: Candidate, reason: string) {
   return { facts:null, reason, cardId:card.card_id } as const;
 }
 
 async function enrichCandidate(card: Candidate) {
   const year = cardYear(card);
+  const isVintage = year >= 1800 && year < 1980;
   const vintageOnly = card.discoveryKinds.length === 1 && card.discoveryKinds[0] === "vintage_mover";
-  if (vintageOnly && (year < 1800 || year >= 1980)) return rejection(card,"vintage search did not resolve to a pre-1980 set");
-  const selected = pickGrade(card);
+  if (vintageOnly && !isVintage) return rejection(card,"vintage search did not resolve to a pre-1980 set");
   const sales30d = Number(card["30 Day Sales"] ?? 0);
   const sales7d = Number(card["7 Day Sales"] ?? 0);
-  if (!selected) return rejection(card,"missing usable grade");
   if (!Number.isFinite(sales30d) || sales30d < MIN_30_DAY_SALES) return rejection(card,"insufficient 30-day sales");
   if (!Number.isFinite(sales7d) || sales7d < 0 || sales7d > sales30d) return rejection(card,"inconsistent sales totals");
 
   const imageUrl = normalizedImage(card.image);
   if (!imageUrl) return rejection(card,"missing valid card image");
 
-  const change7d = Number(card.gain ?? 0);
-  const change30d = Number(card.gain_30day ?? card.gain ?? 0);
-  if (!Number.isFinite(change7d) || Math.abs(change7d) > MAX_ABS_CHANGE_7D) return rejection(card,"extreme 7-day percentage change");
-  if (!Number.isFinite(change30d) || Math.abs(change30d) > MAX_ABS_CHANGE_30D) return rejection(card,"extreme 30-day percentage change");
-  if (vintageOnly && Math.abs(change30d) < MIN_MEANINGFUL_CHANGE) return rejection(card,"no meaningful vintage price move");
+  const sourceChange7d = Number(card.gain ?? 0);
+  const sourceChange30d = Number(card.gain_30day ?? card.gain ?? 0);
+  if (!Number.isFinite(sourceChange7d)) return rejection(card,"invalid 7-day percentage change");
+  if (!Number.isFinite(sourceChange30d)) return rejection(card,"invalid 30-day percentage change");
+  if (!isVintage && Math.abs(sourceChange7d) > MAX_ABS_CHANGE_7D) return rejection(card,"extreme 7-day percentage change");
+  if (!isVintage && Math.abs(sourceChange30d) > MAX_ABS_CHANGE_30D) return rejection(card,"extreme 30-day percentage change");
+
+  const selected = isVintage ? await pickVintageGrade(card) : pickGrade(card);
+  if (!selected) return rejection(card,isVintage ? "no trusted vintage grade valuation" : "missing usable grade");
 
   const grade = selected.grade;
   const [historyResult, fmvResult, compsResult] = await Promise.allSettled([
     cardHedgeFetch<{ prices?: Array<Record<string, unknown>> }>("/v1/cards/prices-by-card", { card_id:card.card_id, grade, days:30 }),
-    cardHedgeFetch<Record<string, unknown>>("/v1/cards/card-fmv", { card_id:card.card_id, grade }),
+    selected.fmvPayload ? Promise.resolve(selected.fmvPayload) : cardHedgeFetch<Record<string, unknown>>("/v1/cards/card-fmv", { card_id:card.card_id, grade }),
     cardHedgeFetch<Record<string, unknown>>("/v1/cards/comps", { card_id:card.card_id, grade, include_raw_prices:true, time_weighted:true }),
   ]);
 
   const history = historyResult.status === "fulfilled" ? parseHistory(historyResult.value) : [];
   const fmvPayload = fmvResult.status === "fulfilled" ? fmvResult.value : {};
   const fmv = (fmvPayload.fmv ?? fmvPayload) as Record<string, unknown>;
-  const fallbackPrice = Number(selected.price ?? 0);
+  const fallbackPrice = selected.price;
   const currentValue = Number(fmv.price ?? fallbackPrice);
   if (!validPrice(currentValue)) return rejection(card,"extreme or invalid FMV");
   if (validPrice(fallbackPrice) && !withinPriceFactor(currentValue,fallbackPrice)) return rejection(card,"FMV conflicts with listed price");
 
   const confidenceGrade = String(fmv.confidence_grade ?? "N/A").toUpperCase();
   if (!TRUSTED_CONFIDENCE.has(confidenceGrade)) return rejection(card,"FMV confidence below B");
-  const freshnessDays = Number(fmv.freshness_days ?? 0);
+  const freshnessDays = Number(fmv.freshness_days ?? Number.POSITIVE_INFINITY);
   if (!Number.isFinite(freshnessDays) || freshnessDays > MAX_FRESHNESS_DAYS) return rejection(card,"stale FMV");
 
   const historyPrices = history.map((item) => item.price).filter(validPrice);
@@ -227,6 +298,11 @@ async function enrichCandidate(card: Candidate) {
   if (compPrices.length >= 3 && !withinPriceFactor(currentValue,median(compPrices))) return rejection(card,"FMV conflicts with comparable sales");
 
   const safeHistory = history.filter((item) => withinPriceFactor(item.price,currentValue));
+  const change7d = isVintage ? historyChange(safeHistory,sourceChange7d,7) : sourceChange7d;
+  const change30d = isVintage ? historyChange(safeHistory,sourceChange30d) : sourceChange30d;
+  if (Math.abs(change7d) > MAX_ABS_CHANGE_7D) return rejection(card,"extreme 7-day percentage change");
+  if (Math.abs(change30d) > MAX_ABS_CHANGE_30D) return rejection(card,"extreme 30-day percentage change");
+  if (vintageOnly && Math.abs(change30d) < MIN_MEANINGFUL_CHANGE) return rejection(card,"no meaningful vintage price move");
   const comps = rawComps.filter((item) => withinPriceFactor(item.price,currentValue));
   const recentSale = comps.find(saleIsToday);
   const allGradePrices = parseGradePrices(card);
@@ -245,7 +321,7 @@ async function enrichCandidate(card: Candidate) {
     eligibleKinds.push("sales_surge");
   }
   if (Boolean(card.rookie)) eligibleKinds.push("rookie_watch");
-  if (year >= 1800 && year < 1980 && Math.abs(change30d) >= MIN_MEANINGFUL_CHANGE) {
+  if (isVintage && Math.abs(change30d) >= MIN_MEANINGFUL_CHANGE) {
     eligibleKinds.push("vintage_mover");
   }
   if (!eligibleKinds.length) return rejection(card,"no eligible market story format");
@@ -397,7 +473,11 @@ export async function syncMarketData() {
       counts[story.storyKind] = (counts[story.storyKind] ?? 0) + 1;
       return counts;
     },{});
-    console.info("[cardhedge] quality review",{ seen:candidates.length,published:stories.length,rejected:rejected.length,deleted,reasonCounts,typeCounts });
+    const vintageGradeCounts = stories.filter((story) => story.storyKind === "vintage_mover").reduce<Record<string,number>>((counts,story) => {
+      counts[story.grade] = (counts[story.grade] ?? 0) + 1;
+      return counts;
+    },{});
+    console.info("[cardhedge] quality review",{ seen:candidates.length,published:stories.length,rejected:rejected.length,deleted,reasonCounts,typeCounts,vintageGradeCounts });
     const message = "Card Hedge sync completed: " + stories.length + " published, " + rejected.length + " rejected, " + deleted + " stale removed";
     await finishSync(runId,"success",candidates.length,stories.length,message);
     return { status:"success", seen:candidates.length, written:stories.length, rejected:rejected.length, deleted, message };
