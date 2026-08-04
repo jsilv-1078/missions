@@ -1,6 +1,9 @@
 import type { MarketInsightItem, MarketStory } from "./types";
 
 const DIRECTION_THRESHOLD = 0.05;
+const MAX_PRICE_VOLUME_STORIES = 10;
+const MAX_MATCHUP_STORIES = 5;
+const MAX_MATCHUP_SALES_RATIO = 1.5;
 
 function normalized(value: string) {
   return value.trim().toLocaleLowerCase();
@@ -76,7 +79,7 @@ function dailyBrief(markets: MarketStory[]) {
     player:"Pulse Market",
     headline,
     cardTitle:`${markets.length} real card markets · ${totalSales.toLocaleString()} recorded 30-day sales`,
-    summary:`This brief summarizes the ${markets.length} verified Card Hedge card markets currently shown in Pulse. It measures market breadth and recorded sales within this tracked set, not the entire collectibles market.`,
+    summary:`This brief summarizes the ${markets.length} verified standalone card records currently shown in Pulse. It measures price direction and recorded sales within this tracked set, not the entire collectibles market.`,
     insight:{
       cardsTracked:markets.length,
       risingCount:rising.length,
@@ -98,7 +101,7 @@ function playerSnapshots(markets: MarketStory[]) {
   return [...groups.values()]
     .filter((stories) => stories.length >= 2)
     .sort((a,b) => b.reduce((sum,story) => sum + story.sales30d,0) - a.reduce((sum,story) => sum + story.sales30d,0))
-    .slice(0,3)
+    .slice(0,5)
     .map((stories) => {
       const ranked = [...stories].sort((a,b) => b.sales30d - a.sales30d).slice(0,3);
       const totalSales = stories.reduce((sum,story) => sum + story.sales30d,0);
@@ -134,10 +137,10 @@ function priceVolumeSignals(markets: MarketStory[]) {
     if (match && !selected.some((story) => story.cardId === match.cardId)) selected.push(match);
   }
   for (const story of ranked) {
-    if (selected.length >= 4) break;
+    if (selected.length >= MAX_PRICE_VOLUME_STORIES) break;
     if (!selected.some((candidate) => candidate.cardId === story.cardId)) selected.push(story);
   }
-  return selected.slice(0,4).map((story) => {
+  return selected.slice(0,MAX_PRICE_VOLUME_STORIES).map((story) => {
     const active = story.sales30d >= medianSales;
     const marketDirection = direction(story.change30d);
     const label = `${active ? "ACTIVE" : "QUIET"} + ${marketDirection.toUpperCase()}`;
@@ -161,44 +164,61 @@ function priceVolumeSignals(markets: MarketStory[]) {
 function marketMatchups(markets: MarketStory[]) {
   const groups = new Map<string,MarketStory[]>();
   for (const story of markets) {
-    const key = normalized(story.sport);
-    if (!key) continue;
+    const key = `${normalized(story.sport)}|${normalized(story.grade)}`;
+    if (!story.sport.trim() || !story.grade.trim() || story.sales30d <= 0) continue;
     groups.set(key,[...(groups.get(key) ?? []),story]);
   }
-  return [...groups.values()]
-    .filter((stories) => stories.length >= 2)
-    .sort((a,b) => b.reduce((sum,story) => sum + story.sales30d,0) - a.reduce((sum,story) => sum + story.sales30d,0))
-    .slice(0,3)
-    .flatMap((stories) => {
-      const lead = [...stories].sort((a,b) => b.sales30d - a.sales30d)[0];
-      const alternatives = stories.filter((story) => story.cardId !== lead.cardId);
-      const differentPlayer = alternatives.filter((story) => normalized(story.player) !== normalized(lead.player));
-      const candidates = differentPlayer.length ? differentPlayer : alternatives;
-      const challenger = [...candidates].sort((a,b) =>
-        Math.abs(Math.log(Math.max(1,a.currentValue) / Math.max(1,lead.currentValue)))
-        - Math.abs(Math.log(Math.max(1,b.currentValue) / Math.max(1,lead.currentValue))),
-      )[0];
-      if (!challenger) return [];
-      return [{
-        ...lead,
-        id:`auto-matchup-${slug(lead.sport)}-${lead.cardId}-${challenger.cardId}`,
-        cardId:`auto-matchup-${slug(lead.sport)}-${lead.cardId}-${challenger.cardId}`,
-        storyKind:"market_matchup" as const,
-        headline:`${lead.player} vs. ${challenger.player}: two ${lead.sport} card markets compared`,
-        cardTitle:`FMV, grade, 30-day direction and sales side by side`,
-        summary:`This matchup compares two verified ${lead.sport} card markets with real Card Hedge FMV, grade, recorded 30-day sales and price direction. It is a market comparison, not a recommendation to buy or sell.`,
-        insight:{items:[item(lead),item(challenger)]},
-      }];
+  const candidates = [...groups.values()].flatMap((stories) => {
+    const pairs:Array<{ lead:MarketStory;challenger:MarketStory;salesRatio:number;combinedSales:number }> = [];
+    for (let first = 0; first < stories.length; first += 1) {
+      for (let second = first + 1; second < stories.length; second += 1) {
+        const lead = stories[first];
+        const challenger = stories[second];
+        if (normalized(lead.player) === normalized(challenger.player)) continue;
+        const salesRatio = Math.max(lead.sales30d,challenger.sales30d) / Math.min(lead.sales30d,challenger.sales30d);
+        if (salesRatio > MAX_MATCHUP_SALES_RATIO) continue;
+        pairs.push({ lead,challenger,salesRatio,combinedSales:lead.sales30d + challenger.sales30d });
+      }
+    }
+    return pairs;
+  }).sort((a,b) => b.combinedSales - a.combinedSales || a.salesRatio - b.salesRatio);
+
+  const usedCardIds = new Set<string>();
+  const sportCounts = new Map<string,number>();
+  const selected:MarketStory[] = [];
+  for (const candidate of candidates) {
+    if (selected.length >= MAX_MATCHUP_STORIES) break;
+    if (usedCardIds.has(candidate.lead.cardId) || usedCardIds.has(candidate.challenger.cardId)) continue;
+    const sportKey = normalized(candidate.lead.sport);
+    if ((sportCounts.get(sportKey) ?? 0) >= 2) continue;
+    usedCardIds.add(candidate.lead.cardId);
+    usedCardIds.add(candidate.challenger.cardId);
+    sportCounts.set(sportKey,(sportCounts.get(sportKey) ?? 0) + 1);
+    const volumeGap = Math.round(Math.abs(candidate.lead.sales30d - candidate.challenger.sales30d) / Math.max(candidate.lead.sales30d,candidate.challenger.sales30d) * 100);
+    selected.push({
+      ...candidate.lead,
+      id:`auto-matchup-${slug(candidate.lead.sport)}-${candidate.lead.cardId}-${candidate.challenger.cardId}`,
+      cardId:`auto-matchup-${slug(candidate.lead.sport)}-${candidate.lead.cardId}-${candidate.challenger.cardId}`,
+      storyKind:"market_matchup" as const,
+      headline:`${candidate.lead.player} vs. ${candidate.challenger.player}: two comparable ${candidate.lead.grade} cards`,
+      cardTitle:`${candidate.lead.grade} · ${candidate.lead.sales30d.toLocaleString()} vs. ${candidate.challenger.sales30d.toLocaleString()} sales · ${volumeGap}% volume gap`,
+      summary:`This matchup compares two verified ${candidate.lead.sport} cards in the same ${candidate.lead.grade} grade with similar recorded 30-day sales volume. It compares value and price direction; it is not a recommendation to buy or sell.`,
+      insight:{items:[item(candidate.lead),item(candidate.challenger)]},
     });
+  }
+  return selected;
 }
 
 export function buildAutomatedMarketStories(markets: MarketStory[]) {
   const verified = markets.filter((story) => !story.demo && Number.isFinite(story.currentValue) && story.currentValue > 0);
   if (!verified.length) return [];
+  const matchups = marketMatchups(verified);
+  const matchupCardIds = new Set(matchups.flatMap((story) => story.insight?.items?.map((market) => market.id) ?? []));
+  const standalone = verified.filter((story) => !matchupCardIds.has(story.cardId));
   return [
-    ...dailyBrief(verified),
-    ...playerSnapshots(verified),
-    ...priceVolumeSignals(verified),
-    ...marketMatchups(verified),
+    ...dailyBrief(standalone),
+    ...playerSnapshots(standalone),
+    ...priceVolumeSignals(standalone),
+    ...matchups,
   ];
 }
