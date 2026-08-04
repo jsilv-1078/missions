@@ -19,18 +19,18 @@ export async function POST(request: NextRequest) {
   if (!auth.ok) return NextResponse.json({error:auth.message},{status:auth.status});
   const startedAt = Date.now();
   const requestId = request.headers.get("x-vercel-id") ?? crypto.randomUUID();
-  console.info(JSON.stringify({ level:"info",message:"Card Hedge sync request started",requestId,route:"/api/admin/sync" }));
+  console.info(JSON.stringify({ level:"info",message:"Market sync request started",requestId,route:"/api/admin/sync" }));
   try {
     const result = await syncMarketData();
     console.info(JSON.stringify({
-      level:"info",message:"Card Hedge sync request completed",requestId,route:"/api/admin/sync",
+      level:"info",message:"Market sync request completed",requestId,route:"/api/admin/sync",
       durationMs:Date.now() - startedAt,status:result.status,seen:result.seen,written:result.written,
     }));
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Market sync failed";
     console.error(JSON.stringify({
-      level:"error",message:"Card Hedge sync request failed",requestId,route:"/api/admin/sync",
+      level:"error",message:"Market sync request failed",requestId,route:"/api/admin/sync",
       durationMs:Date.now() - startedAt,error:message,
     }));
     return NextResponse.json({error:message},{status:502});
