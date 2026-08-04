@@ -145,10 +145,23 @@ function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
   };
 }
 
+function displayNewsImage(value: unknown) {
+  const imageUrl = String(value);
+  try {
+    const parsed = new URL(imageUrl);
+    if (parsed.hostname === "www.sportscollectorsdaily.com" && parsed.pathname.startsWith("/wp-content/uploads/")) {
+      return "https://i0.wp.com/" + parsed.hostname + parsed.pathname + "?ssl=1";
+    }
+  } catch {
+    return imageUrl;
+  }
+  return imageUrl;
+}
+
 function newsRow(row: Record<string, unknown>): NewsStory {
   return {
     id:String(row.id), type:"news", player:String(row.player), sport:String(row.sport), category:String(row.category),
-    headline:String(row.headline), summary:String(row.summary), imageUrl:String(row.image_url), source:String(row.source),
+    headline:String(row.headline), summary:String(row.summary), imageUrl:displayNewsImage(row.image_url), source:String(row.source),
     articleUrl:String(row.article_url), publishedAt:new Date(String(row.published_at)).toISOString(),
     relatedCardId:row.related_card_id ? String(row.related_card_id) : undefined,
     updatedAt:new Date(String(row.updated_at)).toISOString(), demo:Boolean(row.demo),
