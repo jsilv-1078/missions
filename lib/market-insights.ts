@@ -41,6 +41,15 @@ function volumePercentile(markets: MarketStory[], target: MarketStory) {
   return Math.round((Math.max(0,index) / (sorted.length - 1)) * 100);
 }
 
+function ordinal(value: number) {
+  const remainder = value % 100;
+  if (remainder >= 11 && remainder <= 13) return `${value}th`;
+  if (value % 10 === 1) return `${value}st`;
+  if (value % 10 === 2) return `${value}nd`;
+  if (value % 10 === 3) return `${value}rd`;
+  return `${value}th`;
+}
+
 function dailyBrief(markets: MarketStory[]) {
   if (!markets.length) return [];
   const rising = markets.filter((story) => direction(story.change30d) === "rising");
@@ -132,16 +141,17 @@ function priceVolumeSignals(markets: MarketStory[]) {
     const active = story.sales30d >= medianSales;
     const marketDirection = direction(story.change30d);
     const label = `${active ? "ACTIVE" : "QUIET"} + ${marketDirection.toUpperCase()}`;
+    const percentile = volumePercentile(markets,story);
     return {
       ...story,
       id:`auto-signal-${story.cardId}`,
       cardId:`auto-signal-${story.cardId}`,
       storyKind:"price_volume" as const,
       headline:`${active ? "Active" : "Quieter"} trading and a ${signedPercent(story.change30d)} move put ${story.player} in focus`,
-      summary:`Price direction and liquidity are shown together: this card's ${story.sales30d} recorded 30-day sales rank in the ${volumePercentile(markets,story)}th percentile of the verified markets currently tracked in Pulse.`,
+      summary:`Price direction and liquidity are shown together: this card's ${story.sales30d} recorded 30-day sales rank in the ${ordinal(percentile)} percentile of the verified markets currently tracked in Pulse.`,
       insight:{
         label,
-        volumePercentile:volumePercentile(markets,story),
+        volumePercentile:percentile,
         items:[item(story)],
       },
     };
