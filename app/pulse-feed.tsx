@@ -244,7 +244,7 @@ function MarketDetail({ story, close }: { story: MarketStory; close: () => void 
     <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{format.label}</span><strong>{story.player}</strong></div><b>{format.icon}</b></header>
     <div className="detail-scroll">
       <MarketDetailLead story={story}/>
-      <div className="confidence"><div><span>{automated ? "UPDATE METHOD" : "DATA CONFIDENCE"}</span><strong>{automated ? "AUTOMATIC" : `GRADE ${story.confidenceGrade}`}</strong></div><p>{automated ? "Regenerated with each sync" : `Updated ${story.freshnessDays} day${story.freshnessDays === 1 ? "" : "s"} ago`}</p></div>
+      {!automated ? <div className="confidence"><div><span>DATA CONFIDENCE</span><strong>GRADE {story.confidenceGrade}</strong></div><p>Updated {story.freshnessDays} day{story.freshnessDays === 1 ? "" : "s"} ago</p></div> : null}
       {!hideExtraComps ? <ComparableSales story={story}/> : null}
       <div className="why"><span>WHY IT MATTERS</span><p>{story.summary}</p></div>
     </div>
