@@ -119,13 +119,13 @@ export function marketHeadline({
   }
 
   if (storyKind === "vintage_mover") {
-    const year = cardYear > 0 ? String(cardYear) : "Pre-1980";
+    const year = cardYear > 0 ? String(cardYear) : "Vintage";
     const direction = change30d < 0 ? "down" : "up";
     return stableChoice(seed,[
       year + " " + player + " card moves " + direction + " " + change + "%",
       "Vintage watch: " + player + " shifts " + change + "%",
       player + "’s " + year + " card makes a vintage move",
-      "A pre-1980 card shifts for " + player,
+      "A vintage card shifts for " + player,
       year + " " + player + " issue changes " + change + "%",
       "Collectors track a new move in this " + player + " vintage card",
     ],variant);
