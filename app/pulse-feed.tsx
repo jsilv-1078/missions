@@ -16,7 +16,7 @@ function currency(value: number) {
 function dateLabel(value: string) {
   const date = new Date(value);
   return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",year:"numeric"}).format(date)
+    ? new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}).format(date)
     : "Date unavailable";
 }
 
