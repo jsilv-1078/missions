@@ -1,5 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Barlow_Condensed } from "next/font/google";
 import "./globals.css";
+
+const marketHeadline = Barlow_Condensed({
+  subsets: ["latin"],
+  weight: "600",
+  style: "normal",
+  display: "swap",
+  variable: "--font-market-headline",
+});
 
 export const metadata: Metadata = {
   title: "Card Madness Pulse MVP",
@@ -14,5 +23,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en" className={marketHeadline.variable}><body>{children}</body></html>;
 }
