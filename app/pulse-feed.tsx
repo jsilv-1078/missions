@@ -71,7 +71,7 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
 
   if (story.storyKind === "sales_surge") return <div className="market-stage surge-stage"><CardImage story={story}/><div className="surge-tally"><GradeStamp grade={story.grade}/><small>SALES PACE</small><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><b>FASTER</b><div><span><strong>{story.sales7d}</strong>LAST 7D</span><i>→</i><span><strong>{story.previous23DaySales}</strong>PRIOR 23D</span></div></div></div>;
 
-  if (story.storyKind === "vintage_mover") return <div className="market-stage vintage-stage"><div className="vintage-card-wrap"><span>PRE-1980</span><CardImage story={story}/></div><div className="vintage-tally"><GradeStamp grade={story.grade}/><small>VINTAGE ISSUE</small><strong>{story.cardYear || "PRE-80"}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>30-day move<br/>{currency(story.currentValue)} current FMV</span></div></div>;
+  if (story.storyKind === "vintage_mover") return <div className="market-stage vintage-stage"><div className="vintage-card-wrap"><CardImage story={story}/></div><div className="vintage-tally"><GradeStamp grade={story.grade}/><small>VINTAGE ISSUE</small><strong>{story.cardYear || "VINTAGE"}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>30-day move<br/>{currency(story.currentValue)} current FMV</span></div></div>;
 
   return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><GradeStamp grade={story.grade}/><small>ROOKIE FMV</small><strong>{currency(story.currentValue)}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>{story.sales30d} sales · 30 days</span></div></div>;
 }
@@ -119,15 +119,15 @@ function priorValue(story: MarketStory) {
   return multiplier > 0 ? story.currentValue / multiplier : 0;
 }
 
-function averageComp(story: MarketStory) {
-  const prices = story.comps.map((comp) => comp.price).filter((price) => Number.isFinite(price) && price > 0);
-  return prices.length ? prices.reduce((sum,price) => sum + price,0) / prices.length : null;
-}
-
-function MarketSnapshot({ items }: { items:SnapshotItem[] }) {
+function MarketSnapshot({ items, story }: { items:SnapshotItem[]; story:MarketStory }) {
+  const sales = [...story.comps]
+    .filter((comp) => Number.isFinite(comp.price) && comp.price > 0)
+    .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0,3);
   return <section className="market-snapshot" aria-label="Market snapshot">
     <header><span>MARKET SNAPSHOT</span><b>VERIFIED DATA</b></header>
-    <div>{items.map((item) => <article key={item.label}><span>{item.label}</span><strong className={item.tone}>{item.value}</strong></article>)}</div>
+    <div className="snapshot-metrics">{items.map((item) => <article key={item.label}><span>{item.label}</span><strong className={item.tone}>{item.value}</strong></article>)}</div>
+    <div className="snapshot-sales"><h2>LAST {sales.length || 3} VERIFIED SALES</h2>{sales.length ? sales.map((sale,index) => <article key={sale.date + index}><span><b>{dateLabel(sale.date)}</b><small>{sale.venue ?? "Recorded sale"}</small></span><strong>{currency(sale.price)}</strong></article>) : <p>No recent verified sales available.</p>}</div>
   </section>;
 }
 
@@ -150,37 +150,28 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
     return <><div className="surge-detail"><span>SALES VELOCITY</span><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><small>FASTER DAILY PACE</small><div><p><b>{priorDaily.toFixed(1)}</b><span>DAILY · PRIOR 23D</span></p><i>→</i><p><b>{recentDaily.toFixed(1)}</b><span>DAILY · LAST 7D</span></p></div></div><SalesContextGrid story={story} surge/></>;
   }
   if (story.storyKind === "rookie_watch") {
-    const compAverage = averageComp(story);
     return <><div className="rookie-detail"><b>RC</b><div><span>ROOKIE CARD FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong><small>{story.sales30d} recorded sales in 30 days</small></div></div><MarketSnapshot items={[
       {label:"30-DAY MOVE",value:(negative ? "−" : "+") + Math.abs(story.change30d).toFixed(1) + "%",tone:negative ? "down" : "up"},
       {label:"30 DAYS AGO",value:currency(priorValue(story))},
-      {label:"RECORDED SALES",value:story.sales30d.toLocaleString()},
-      {label:compAverage ? "AVG VERIFIED SALE" : "LAST 7D SALES",value:compAverage ? currency(compAverage) : story.sales7d.toLocaleString()},
-    ]}/></>;
+    ]} story={story}/></>;
   }
   if (story.storyKind === "vintage_mover") {
-    const compAverage = averageComp(story);
-    return <><div className="vintage-detail"><span>PRE-1980 ISSUE</span><strong>{story.cardYear || "VINTAGE"}</strong><div><p><small>CARD GRADE</small><b>{story.grade}</b></p><p><small>CURRENT FMV</small><b>{currency(story.currentValue)}</b></p></div><em className={negative ? "down" : "up"}>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}% OVER 30 DAYS</em></div><MarketSnapshot items={[
-      {label:"30 DAYS AGO",value:currency(priorValue(story))},
+    return <><div className="vintage-detail"><span>VINTAGE MARKET</span><strong>{story.cardYear || "VINTAGE"}</strong><div><p><small>CARD GRADE</small><b>{story.grade}</b></p><p><small>CURRENT FMV</small><b>{currency(story.currentValue)}</b></p></div><em className={negative ? "down" : "up"}>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}% OVER 30 DAYS</em></div><MarketSnapshot items={[
       {label:"30-DAY SALES",value:story.sales30d.toLocaleString()},
       {label:"LAST 7D SALES",value:story.sales7d.toLocaleString()},
-      {label:compAverage ? "AVG VERIFIED SALE" : "30-DAY MOVE",value:compAverage ? currency(compAverage) : (negative ? "−" : "+") + Math.abs(story.change30d).toFixed(1) + "%",tone:compAverage ? undefined : negative ? "down" : "up"},
-    ]}/></>;
+    ]} story={story}/></>;
   }
   const oldValue = priorValue(story);
   const dollarMove = story.currentValue - oldValue;
-  const compAverage = averageComp(story);
   return <><div className="detail-price"><span>30-DAY {story.storyKind === "biggest_loss" ? "PRICE LOSS" : "PRICE GAIN"} · {story.grade}</span><strong>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{currency(story.currentValue)} FMV</b></div><MarketSnapshot items={[
     {label:"30 DAYS AGO",value:currency(oldValue)},
     {label:"DOLLAR MOVE",value:(dollarMove < 0 ? "−" : "+") + currency(Math.abs(dollarMove)),tone:dollarMove < 0 ? "down" : "up"},
-    {label:"30-DAY SALES",value:story.sales30d.toLocaleString()},
-    {label:compAverage ? "AVG VERIFIED SALE" : "LAST 7D SALES",value:compAverage ? currency(compAverage) : story.sales7d.toLocaleString()},
-  ]}/></>;
+  ]} story={story}/></>;
 }
 
 function MarketDetail({ story, close }: { story: MarketStory; close: () => void }) {
   const format = MARKET_FORMATS[story.storyKind];
-  const hideExtraComps = story.storyKind === "recent_sale";
+  const hideExtraComps = ["recent_sale","rookie_watch","vintage_mover","biggest_gain","biggest_loss"].includes(story.storyKind);
   return <section className={"detail-face market-detail " + kindClass(story.storyKind)}>
     <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{format.label}</span><strong>{story.player}</strong></div><b>{format.icon}</b></header>
     <div className="detail-scroll">
