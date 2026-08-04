@@ -636,7 +636,11 @@ export async function syncMarketData() {
       deleted,reasonCounts,typeCounts,categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,
       vintageGradeCounts,discovery:discovery.stats,
     }));
-    const message = "Market sync completed: " + stories.length + " published, " + rejected.length + " rejected, " + deleted + " stale removed";
+    const categorySummary = (Object.keys(CATEGORY_TARGETS) as TargetCategory[])
+      .map((category) => category + " " + (categoryCounts[category] ?? 0) + "/" + CATEGORY_TARGETS[category])
+      .join(" · ");
+    const message = "Market sync completed: " + stories.length + " published, " + rejected.length + " rejected, " + deleted
+      + " stale removed. Mix: " + categorySummary;
     await finishSync(runId,"success",candidates.length,stories.length,message);
     return {
       status:"success",seen:candidates.length,written:stories.length,rejected:rejected.length,deleted,message,
