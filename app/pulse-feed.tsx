@@ -22,8 +22,8 @@ function dateLabel(value: string) {
 
 const MARKET_FORMATS:Record<MarketStoryKind,{ label:string;icon:string;cue:string }> = {
   high_sales_30d:{ label:"HIGH 30-DAY SALES",icon:"30",cue:"VOLUME, SALES & CONFIDENCE" },
-  biggest_gain:{ label:"BIGGEST PRICE GAIN",icon:"↑",cue:"PRICE MOVE & SALES" },
-  biggest_loss:{ label:"BIGGEST PRICE LOSS",icon:"↓",cue:"PRICE MOVE & SALES" },
+  biggest_gain:{ label:"CARD GAINING VALUE",icon:"↑",cue:"PRICE MOVE & SALES" },
+  biggest_loss:{ label:"CARD LOSING VALUE",icon:"↓",cue:"PRICE MOVE & SALES" },
   recent_sale:{ label:"SOLD TODAY",icon:"✓",cue:"SALE RECEIPT & COMPS" },
   grade_gap:{ label:"GRADING PREMIUM",icon:"G",cue:"PSA 10, PSA 9 & RAW" },
   sales_surge:{ label:"SALES SURGE",icon:"⚡",cue:"PACE & SALES BREAKDOWN" },
@@ -229,7 +229,7 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
   }
   const oldValue = priorValue(story);
   const dollarMove = story.currentValue - oldValue;
-  return <><div className="detail-price"><span>30-DAY {story.storyKind === "biggest_loss" ? "PRICE LOSS" : "PRICE GAIN"} · {story.grade}</span><strong>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{currency(story.currentValue)} FMV</b></div><MarketSnapshot items={[
+  return <><div className="detail-price"><span>30-DAY CARD VALUE {story.storyKind === "biggest_loss" ? "DECLINE" : "INCREASE"} · {story.grade}</span><strong>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{currency(story.currentValue)} FMV</b></div><MarketSnapshot items={[
     {label:"30 DAYS AGO",value:currency(oldValue)},
     {label:"DOLLAR MOVE",value:(dollarMove < 0 ? "−" : "+") + currency(Math.abs(dollarMove)),tone:dollarMove < 0 ? "down" : "up"},
   ]} story={story}/></>;
@@ -243,7 +243,7 @@ function MarketDetail({ story, close }: { story: MarketStory; close: () => void 
     <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{format.label}</span><strong>{story.player}</strong></div><b>{format.icon}</b></header>
     <div className="detail-scroll">
       <MarketDetailLead story={story}/>
-      <div className="confidence"><div><span>{automated ? "DATA SOURCE" : "DATA CONFIDENCE"}</span><strong>{automated ? "CARD HEDGE" : `GRADE ${story.confidenceGrade}`}</strong></div><p>{automated ? "Regenerated with each sync" : `Updated ${story.freshnessDays} day${story.freshnessDays === 1 ? "" : "s"} ago`}</p></div>
+      <div className="confidence"><div><span>{automated ? "UPDATE METHOD" : "DATA CONFIDENCE"}</span><strong>{automated ? "AUTOMATIC" : `GRADE ${story.confidenceGrade}`}</strong></div><p>{automated ? "Regenerated with each sync" : `Updated ${story.freshnessDays} day${story.freshnessDays === 1 ? "" : "s"} ago`}</p></div>
       {!hideExtraComps ? <ComparableSales story={story}/> : null}
       <div className="why"><span>WHY IT MATTERS</span><p>{story.summary}</p></div>
     </div>
@@ -259,7 +259,7 @@ function NewsDetail({ story, close }: { story: NewsStory; close: () => void }) {
       <h2 className="article-headline">{story.headline}</h2>
       <div className="article-image"><Image src={story.imageUrl} alt={story.player} fill sizes="(max-width: 799px) 92vw, 55vw"/></div>
       <p className="article-summary">{story.summary}</p>
-      <div className="why"><span>WHY COLLECTORS CARE</span><p>Player news can change attention, sales volume and demand for related cards. Market context will be connected automatically when Card Hedge identifies a matching player or card.</p></div>
+      <div className="why"><span>WHY COLLECTORS CARE</span><p>Player news can change attention, sales volume and demand for related cards. Market context will be connected automatically when a matching player or card is available.</p></div>
       <a className="article-link" href={story.articleUrl} target="_blank" rel="noreferrer">READ THE ORIGINAL ARTICLE <b>↗</b></a>
     </div>
     <button className="return-cue" onClick={close}>← SWIPE LEFT TO RETURN</button>
@@ -292,7 +292,7 @@ function Story({ story }: { story: FeedStory }) {
 function EmptyFeed() {
   return <section className="empty-feed">
     <PulseLogo/>
-    <div><span>LIVE FEED</span><h1>No verified stories yet.</h1><p>Published news and live Card Hedge market updates will appear here as they become available.</p></div>
+    <div><span>LIVE FEED</span><h1>No verified stories yet.</h1><p>Published news and live card-market updates will appear here as they become available.</p></div>
   </section>;
 }
 
