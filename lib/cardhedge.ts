@@ -42,7 +42,7 @@ const VINTAGE_RESULTS_PER_YEAR = 25;
 const MAX_VINTAGE_CANDIDATES = 16;
 const SEARCH_CONCURRENCY = 6;
 const MAX_PUBLISHED_STORIES = 30;
-const ENRICH_CONCURRENCY = 4;
+const ENRICH_CONCURRENCY = 8;
 const MIN_30_DAY_SALES = 5;
 const MIN_VINTAGE_30_DAY_SALES = 3;
 const MAX_ABS_CHANGE_7D = 200;
@@ -175,15 +175,6 @@ async function pickVintageGrade(card: Candidate):Promise<GradeSelection | undefi
   }
 }
 
-function parseHistory(payload: unknown) {
-  const prices = (payload as { prices?: Array<Record<string, unknown>> })?.prices ?? [];
-  return prices
-    .map((item) => ({ date:String(item.closing_date ?? ""), price:Number(item.price ?? 0) }))
-    .filter((item) => Number.isFinite(item.price) && item.price > 0)
-    .sort((a,b) => a.date.localeCompare(b.date))
-    .slice(-30);
-}
-
 function parseComps(payload: unknown) {
   const source = payload as Record<string, unknown>;
   const possible = source.raw_prices ?? source.prices ?? source.sales ?? [];
@@ -248,19 +239,6 @@ function withinPriceFactor(value: number, reference: number) {
   return ratio >= 1 / MAX_PRICE_FACTOR && ratio <= MAX_PRICE_FACTOR;
 }
 
-function historyChange(history: Array<{date:string;price:number}>, fallback: number, days?: number) {
-  let relevant = history;
-  if (days && history.length > 1) {
-    const latest = Math.max(...history.map((item) => Date.parse(item.date)).filter(Number.isFinite));
-    if (Number.isFinite(latest)) relevant = history.filter((item) => Date.parse(item.date) >= latest - days * 86400000);
-  }
-  if (relevant.length < 2) return fallback;
-  const first = relevant[0].price;
-  const last = relevant[relevant.length - 1].price;
-  const change = first > 0 ? ((last - first) / first) * 100 : fallback;
-  return Number.isFinite(change) ? change : fallback;
-}
-
 function rejection(card: Candidate, reason: string) {
   return { facts:null, reason, cardId:card.card_id } as const;
 }
@@ -292,13 +270,11 @@ async function enrichCandidate(card: Candidate) {
   if (!selected) return rejection(card,isVintage ? "no trusted vintage grade valuation" : "missing usable grade");
 
   const grade = selected.grade;
-  const [historyResult, fmvResult, compsResult] = await Promise.allSettled([
-    cardHedgeFetch<{ prices?: Array<Record<string, unknown>> }>("/v1/cards/prices-by-card", { card_id:card.card_id, grade, days:30 }),
+  const [fmvResult, compsResult] = await Promise.allSettled([
     selected.fmvPayload ? Promise.resolve(selected.fmvPayload) : cardHedgeFetch<Record<string, unknown>>("/v1/cards/card-fmv", { card_id:card.card_id, grade }),
     cardHedgeFetch<Record<string, unknown>>("/v1/cards/comps", { card_id:card.card_id, grade, include_raw_prices:true, time_weighted:true }),
   ]);
 
-  const history = historyResult.status === "fulfilled" ? parseHistory(historyResult.value) : [];
   const fmvPayload = fmvResult.status === "fulfilled" ? fmvResult.value : {};
   const fmv = (fmvPayload.fmv ?? fmvPayload) as Record<string, unknown>;
   const fallbackPrice = selected.price;
@@ -311,16 +287,12 @@ async function enrichCandidate(card: Candidate) {
   const freshnessDays = Number(fmv.freshness_days ?? Number.POSITIVE_INFINITY);
   if (!Number.isFinite(freshnessDays) || freshnessDays > MAX_FRESHNESS_DAYS) return rejection(card,"stale FMV");
 
-  const historyPrices = history.map((item) => item.price).filter(validPrice);
-  if (historyPrices.length >= 3 && !withinPriceFactor(currentValue,median(historyPrices))) return rejection(card,"FMV conflicts with price history");
-
   const rawComps = compsResult.status === "fulfilled" ? parseComps(compsResult.value) : [];
   const compPrices = rawComps.map((item) => item.price).filter(validPrice);
   if (compPrices.length >= 3 && !withinPriceFactor(currentValue,median(compPrices))) return rejection(card,"FMV conflicts with comparable sales");
 
-  const safeHistory = history.filter((item) => withinPriceFactor(item.price,currentValue));
-  const change7d = isVintage ? historyChange(safeHistory,sourceChange7d,7) : sourceChange7d;
-  const change30d = isVintage ? historyChange(safeHistory,sourceChange30d) : sourceChange30d;
+  const change7d = sourceChange7d;
+  const change30d = sourceChange30d;
   if (Math.abs(change7d) > MAX_ABS_CHANGE_7D) return rejection(card,"extreme 7-day percentage change");
   if (Math.abs(change30d) > MAX_ABS_CHANGE_30D) return rejection(card,"extreme 30-day percentage change");
   if (vintageOnly && Math.abs(change30d) < MIN_MEANINGFUL_CHANGE) return rejection(card,"no meaningful vintage price move");
@@ -348,10 +320,7 @@ async function enrichCandidate(card: Candidate) {
   if (!eligibleKinds.length) return rejection(card,"no eligible market story format");
 
   const updatedAt = new Date().toISOString();
-  const fallbackChart = [fallbackPrice,currentValue].filter((item,index,array) => validPrice(item) && withinPriceFactor(item,currentValue) && array.indexOf(item) === index);
-  const chart = safeHistory.length > 1
-    ? safeHistory.map((item) => item.price)
-    : fallbackChart.length > 1 ? fallbackChart : [currentValue,currentValue];
+  const chart = [currentValue,currentValue];
 
   return { facts:{
     player:card.player || "Unknown player", sport:displayCategory(card.category || "Sports Cards"),
