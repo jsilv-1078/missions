@@ -66,6 +66,14 @@ async function initializeSchema() {
   await sql.query("CREATE INDEX IF NOT EXISTS news_stories_published_idx ON news_stories(published_at DESC)");
   await sql.query("DELETE FROM market_stories WHERE demo=TRUE");
   await sql.query("DELETE FROM news_stories WHERE demo=TRUE");
+  await sql.query(
+    "UPDATE news_stories SET image_url=$1,updated_at=NOW() WHERE article_url=$2 AND image_url=$3",
+    [
+      "https://www.sportscollectorsdaily.com/wp-content/uploads/2026/07/IMG_20260730_134718262_HDR-1536x1152.jpg",
+      "https://www.sportscollectorsdaily.com/thats-a-wrap-observations-as-the-nationals-annual-run-ends/",
+      "https://www.sportscollectorsdaily.com/wp-content/uploads/2026/08/crowds-outside-stephens-convention-center-national-sports-collectors-convention.jpeg",
+    ],
+  );
   await sql.query([
     "DELETE FROM market_stories WHERE",
     "ABS(change_7d) > 200 OR ABS(change_30d) > 300 OR",
