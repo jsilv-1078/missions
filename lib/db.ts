@@ -163,7 +163,7 @@ function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
   });
   return {
     id:String(row.id), type:"market", storyKind,
-    player:String(row.player), sport:String(row.sport), headline, summary:String(row.summary),
+    player:String(row.player), sport:String(row.sport), headline, summary:publicMarketCopy(row.summary),
     cardId:String(row.card_id), cardTitle:String(row.card_title), imageUrl:String(row.image_url), grade:String(row.grade),
     currentValue:Number(row.current_value), change7d:Number(row.change_7d), change30d:Number(row.change_30d),
     sales7d:Number(row.sales_7d), sales30d:Number(row.sales_30d), confidenceGrade:String(row.confidence_grade),
@@ -175,6 +175,13 @@ function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
     recentSale,
     updatedAt:new Date(String(row.updated_at)).toISOString(), demo:Boolean(row.demo),
   };
+}
+
+function publicMarketCopy(value: unknown) {
+  return String(value)
+    .replace(/Current Card Hedge FMV/gi,"Current estimated value")
+    .replace(/Card Hedge identifies this as a rookie card with/gi,"This rookie card has")
+    .replace(/Card Hedge/gi,"Market data");
 }
 
 function displayNewsImage(value: unknown) {
@@ -297,7 +304,7 @@ export async function getLatestSyncRun(source: string) {
   if (!row) return null;
   return {
     id:Number(row.id),status:String(row.status),recordsSeen:Number(row.records_seen),
-    recordsWritten:Number(row.records_written),message:String(row.message ?? ""),
+    recordsWritten:Number(row.records_written),message:publicMarketCopy(row.message ?? ""),
     startedAt:new Date(String(row.started_at)).toISOString(),
     finishedAt:row.finished_at ? new Date(String(row.finished_at)).toISOString() : null,
   };
