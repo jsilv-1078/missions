@@ -1,4 +1,5 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { marketHeadline } from "./market-headlines";
 import type { FeedStory, MarketStory, NewArticleInput, NewsStory } from "./types";
 
 type SqlClient = NeonQueryFunction<false, false>;
@@ -128,9 +129,16 @@ async function upsertNewsStory(story: NewsStory, initialize = true) {
 }
 
 function marketRow(row: Record<string, unknown>): MarketStory {
+  const storedHeadline = String(row.headline);
+  const headline = storedHeadline.endsWith(" card draws heavy collector activity")
+    ? marketHeadline({
+      cardId:String(row.card_id), player:String(row.player), storyKind:row.story_kind as MarketStory["storyKind"],
+      change30d:Number(row.change_30d), sales30d:Number(row.sales_30d),
+    })
+    : storedHeadline;
   return {
     id:String(row.id), type:"market", storyKind:row.story_kind as MarketStory["storyKind"],
-    player:String(row.player), sport:String(row.sport), headline:String(row.headline), summary:String(row.summary),
+    player:String(row.player), sport:String(row.sport), headline, summary:String(row.summary),
     cardId:String(row.card_id), cardTitle:String(row.card_title), imageUrl:String(row.image_url), grade:String(row.grade),
     currentValue:Number(row.current_value), change7d:Number(row.change_7d), change30d:Number(row.change_30d),
     sales7d:Number(row.sales_7d), sales30d:Number(row.sales_30d), confidenceGrade:String(row.confidence_grade),

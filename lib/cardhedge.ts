@@ -1,4 +1,5 @@
 import { beginSync, deleteMarketStoriesExcept, finishSync, upsertMarketStory } from "./db";
+import { marketHeadline } from "./market-headlines";
 import type { MarketStory } from "./types";
 
 type CardSearchItem = {
@@ -67,12 +68,6 @@ function pickGrade(card: CardSearchItem) {
     ?? prices.find((item) => item.grade === "PSA 9")
     ?? prices.find((item) => item.grade === "Raw")
     ?? prices[0];
-}
-
-function headline(card: Candidate, change30d: number) {
-  if (card.storyKind === "decline") return card.player + " card falls " + Math.abs(change30d).toFixed(1) + "% over 30 days";
-  if (card.storyKind === "volume") return card.player + " card draws heavy collector activity";
-  return card.player + " card gains " + change30d.toFixed(1) + "% over 30 days";
 }
 
 function summary(card: Candidate, sales30d: number) {
@@ -177,7 +172,7 @@ async function enrichCandidate(card: Candidate) {
   return { story:{
     id:"market-" + card.card_id, type:"market", storyKind:card.storyKind,
     player:card.player || "Unknown player", sport:card.category || "Sports Cards",
-    headline:headline(card,change30d), summary:summary(card,sales30d),
+    headline:marketHeadline({ cardId:card.card_id,player:card.player || "Unknown player",storyKind:card.storyKind,change30d,sales30d }), summary:summary(card,sales30d),
     cardId:card.card_id, cardTitle:card.description, imageUrl,
     grade, currentValue, change7d, change30d, sales7d:Number(card["7 Day Sales"] ?? 0), sales30d,
     confidenceGrade, freshnessDays, chart, comps, updatedAt, demo:false,
