@@ -246,10 +246,40 @@ export async function deleteNewsStory(id: string) {
   await getSql().query("DELETE FROM news_stories WHERE id=$1", [id]);
 }
 
-export async function beginSync(source: string) {
+export async function beginSync(source: string, message = "Sync started") {
   await ensureSchema();
-  const rows = await getSql().query("INSERT INTO sync_runs(source,status) VALUES($1,'running') RETURNING id", [source]);
+  await getSql().query(
+    "UPDATE sync_runs SET status='failed',message='Previous sync did not finish before the function timeout',finished_at=NOW() WHERE source=$1 AND status='running' AND started_at < NOW() - INTERVAL '90 seconds'",
+    [source],
+  );
+  const rows = await getSql().query(
+    "INSERT INTO sync_runs(source,status,message) VALUES($1,'running',$2) RETURNING id",
+    [source,message],
+  );
   return Number(rows[0].id);
+}
+
+export async function updateSyncProgress(id: number, message: string, seen = 0, written = 0) {
+  await getSql().query(
+    "UPDATE sync_runs SET message=$2,records_seen=$3,records_written=$4 WHERE id=$1 AND status='running'",
+    [id,message,seen,written],
+  );
+}
+
+export async function getLatestSyncRun(source: string) {
+  await ensureSchema();
+  const rows = await getSql().query(
+    "SELECT id,status,records_seen,records_written,message,started_at,finished_at FROM sync_runs WHERE source=$1 ORDER BY started_at DESC LIMIT 1",
+    [source],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id:Number(row.id),status:String(row.status),recordsSeen:Number(row.records_seen),
+    recordsWritten:Number(row.records_written),message:String(row.message ?? ""),
+    startedAt:new Date(String(row.started_at)).toISOString(),
+    finishedAt:row.finished_at ? new Date(String(row.finished_at)).toISOString() : null,
+  };
 }
 
 export async function finishSync(id: number, status: string, seen: number, written: number, message: string) {

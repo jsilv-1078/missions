@@ -1,4 +1,4 @@
-import { beginSync, deleteMarketStoriesExcept, finishSync, upsertMarketStory } from "./db";
+import { beginSync, deleteMarketStoriesExcept, finishSync, updateSyncProgress, upsertMarketStory } from "./db";
 import { marketHeadline } from "./market-headlines";
 import type { MarketGradePrice, MarketSale, MarketStory, MarketStoryKind } from "./types";
 
@@ -19,6 +19,13 @@ type CardSearchItem = {
   prices?: Array<{ grade: string; price: string | number }>;
 };
 
+type CardSetSearchItem = {
+  name: string;
+  year?: string | number;
+  category?: string;
+  "30 Day Sales"?: number;
+};
+
 type DiscoveryKind = "high_sales_30d" | "biggest_gain" | "biggest_loss" | "rookie_watch" | "vintage_mover";
 type Candidate = CardSearchItem & { discoveryKinds: DiscoveryKind[] };
 type GradeSelection = { grade:string;price:number;fmvPayload?:Record<string,unknown> };
@@ -29,15 +36,17 @@ type MarketFacts = Omit<MarketStory,"id" | "type" | "storyKind" | "headline" | "
 
 const API_BASE = "https://api.cardhedger.com";
 const CATEGORIES = ["Baseball", "Basketball", "Football", "Hockey", "Soccer", "Pokemon"];
-const VINTAGE_SEARCH_BUCKETS = [
-  { search:"197",pageSize:3 },{ search:"196",pageSize:3 },{ search:"195",pageSize:3 },{ search:"194",pageSize:3 },
-  { search:"193",pageSize:2 },{ search:"192",pageSize:2 },{ search:"191",pageSize:2 },{ search:"190",pageSize:2 },
-];
+const VINTAGE_SET_PREFIXES = ["197","196","195","194","193","192","191","190"];
 const RESULTS_PER_BUCKET = 3;
+const VINTAGE_SET_POOL_SIZE = 100;
+const MAX_VINTAGE_SETS = 10;
+const VINTAGE_RESULTS_PER_SET = 20;
+const MAX_VINTAGE_CANDIDATES = 16;
 const SEARCH_CONCURRENCY = 6;
 const MAX_PUBLISHED_STORIES = 30;
 const ENRICH_CONCURRENCY = 4;
 const MIN_30_DAY_SALES = 5;
+const MIN_VINTAGE_30_DAY_SALES = 3;
 const MAX_ABS_CHANGE_7D = 200;
 const MAX_ABS_CHANGE_30D = 300;
 const MIN_FMV_USD = 0.5;
@@ -94,6 +103,21 @@ function yearFrom(value: string) {
 
 function cardYear(card: CardSearchItem) {
   return yearFrom(card.set) || yearFrom(card.description);
+}
+
+function vintageSetYear(set: CardSetSearchItem) {
+  const explicitYear = Number(set.year ?? 0);
+  return Number.isFinite(explicitYear) && explicitYear > 0 ? explicitYear : yearFrom(set.name);
+}
+
+function isVintageCard(card: CardSearchItem) {
+  const year = cardYear(card);
+  return year >= 1800 && year < 1980;
+}
+
+function hasVintageSalesVolume(card: CardSearchItem) {
+  const sales30d = Number(card["30 Day Sales"] ?? 0);
+  return Number.isFinite(sales30d) && sales30d >= MIN_VINTAGE_30_DAY_SALES;
 }
 
 function pickGrade(card: CardSearchItem):GradeSelection | undefined {
@@ -254,7 +278,10 @@ async function enrichCandidate(card: Candidate) {
   if (vintageOnly && !isVintage) return rejection(card,"vintage search did not resolve to a pre-1980 set");
   const sales30d = Number(card["30 Day Sales"] ?? 0);
   const sales7d = Number(card["7 Day Sales"] ?? 0);
-  if (!Number.isFinite(sales30d) || sales30d < MIN_30_DAY_SALES) return rejection(card,"insufficient 30-day sales");
+  const minimumSales30d = isVintage ? MIN_VINTAGE_30_DAY_SALES : MIN_30_DAY_SALES;
+  if (!Number.isFinite(sales30d) || sales30d < minimumSales30d) {
+    return rejection(card,isVintage ? "insufficient vintage 30-day sales" : "insufficient 30-day sales");
+  }
   if (!Number.isFinite(sales7d) || sales7d < 0 || sales7d > sales30d) return rejection(card,"inconsistent sales totals");
 
   const imageUrl = normalizedImage(card.image);
@@ -342,41 +369,118 @@ async function enrichCandidate(card: Candidate) {
   } satisfies MarketFacts, reason:null, cardId:card.card_id } as const;
 }
 
-async function discoverCandidates() {
-  const requests: Array<{ category:string; discoveryKind:DiscoveryKind; path:string; body:Record<string,unknown> }> = [];
-  for (const category of CATEGORIES) {
-    requests.push({ category,discoveryKind:"biggest_gain",path:"/v1/cards/search-cards-wsort",body:{ category,sort_by:"gain_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
-    requests.push({ category,discoveryKind:"biggest_loss",path:"/v1/cards/search-cards-wsort",body:{ category,sort_by:"gain_30day",sort_order:"asc",page:1,page_size:RESULTS_PER_BUCKET } });
-    requests.push({ category,discoveryKind:"high_sales_30d",path:"/v1/cards/search-cards-wsort",body:{ category,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
-    requests.push({ category,discoveryKind:"rookie_watch",path:"/v1/cards/card-search",body:{ category,rookie:"yes",page:1,page_size:RESULTS_PER_BUCKET } });
-  }
-  for (const { search,pageSize } of VINTAGE_SEARCH_BUCKETS) {
-    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"gain_30day",sort_order:"desc",page:1,page_size:pageSize } });
-    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"gain_30day",sort_order:"asc",page:1,page_size:pageSize } });
-    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:pageSize } });
-  }
-  const responses = await mapWithConcurrency(requests,SEARCH_CONCURRENCY,async (item) => {
+type DiscoveryRequest = { category:string; discoveryKind:DiscoveryKind; path:string; body:Record<string,unknown> };
+
+async function runDiscoveryRequests(requests: DiscoveryRequest[]) {
+  return mapWithConcurrency(requests,SEARCH_CONCURRENCY,async (item) => {
     try {
       return await cardHedgeFetch<{ cards?:CardSearchItem[] }>(item.path,item.body);
     } catch (error) {
-      console.warn("[cardhedge] category search failed",{ category:item.category,storyKind:item.discoveryKind,error:error instanceof Error ? error.message : "Unknown error" });
+      console.warn(JSON.stringify({
+        level:"warn",message:"Card Hedge candidate search failed",category:item.category,
+        storyKind:item.discoveryKind,error:error instanceof Error ? error.message : "Unknown error",
+      }));
       return { cards:[] };
     }
   });
+}
+
+async function discoverVintageSets() {
+  const responses = await mapWithConcurrency(VINTAGE_SET_PREFIXES,SEARCH_CONCURRENCY,async (prefix) => {
+    try {
+      return await cardHedgeFetch<{ sets?:CardSetSearchItem[] }>("/v1/cards/set-search",{
+        search:prefix,count:VINTAGE_SET_POOL_SIZE,
+      });
+    } catch (error) {
+      console.warn(JSON.stringify({
+        level:"warn",message:"Card Hedge vintage set search failed",prefix,
+        error:error instanceof Error ? error.message : "Unknown error",
+      }));
+      return { sets:[] };
+    }
+  });
+
+  const pools = responses.map((response) => (response.sets ?? [])
+    .filter((set) => {
+      const year = vintageSetYear(set);
+      return year >= 1800 && year < 1980;
+    })
+    .sort((a,b) => Number(b["30 Day Sales"] ?? 0) - Number(a["30 Day Sales"] ?? 0)));
+  const verified = new Map<string,CardSetSearchItem>();
+  for (const pool of pools) {
+    const set = pool[0];
+    if (set?.name && !verified.has(set.name)) verified.set(set.name,set);
+  }
+  const remaining = pools.flatMap((pool) => pool.slice(1))
+    .sort((a,b) => Number(b["30 Day Sales"] ?? 0) - Number(a["30 Day Sales"] ?? 0));
+  for (const set of remaining) {
+    if (verified.size >= MAX_VINTAGE_SETS) break;
+    if (set.name && !verified.has(set.name)) verified.set(set.name,set);
+  }
+  const rawSetCount = responses.reduce((count,response) => count + (response.sets?.length ?? 0),0);
+  return { sets:[...verified.values()].slice(0,MAX_VINTAGE_SETS),rawSetCount };
+}
+
+async function discoverCandidates() {
+  const modernRequests: DiscoveryRequest[] = [];
+  for (const category of CATEGORIES) {
+    modernRequests.push({ category,discoveryKind:"biggest_gain",path:"/v1/cards/search-cards-wsort",body:{ category,sort_by:"gain_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
+    modernRequests.push({ category,discoveryKind:"biggest_loss",path:"/v1/cards/search-cards-wsort",body:{ category,sort_by:"gain_30day",sort_order:"asc",page:1,page_size:RESULTS_PER_BUCKET } });
+    modernRequests.push({ category,discoveryKind:"high_sales_30d",path:"/v1/cards/search-cards-wsort",body:{ category,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
+    modernRequests.push({ category,discoveryKind:"rookie_watch",path:"/v1/cards/card-search",body:{ category,rookie:"yes",page:1,page_size:RESULTS_PER_BUCKET } });
+  }
+
+  const [modernResponses,vintageSetResult] = await Promise.all([
+    runDiscoveryRequests(modernRequests),discoverVintageSets(),
+  ]);
+  const vintageRequests:DiscoveryRequest[] = [];
+  for (const set of vintageSetResult.sets) {
+    const category = "Vintage " + vintageSetYear(set) + " · " + set.name;
+    vintageRequests.push({ category,discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ set:set.name,sort_by:"gain_30day",sort_order:"desc",page:1,page_size:VINTAGE_RESULTS_PER_SET } });
+    vintageRequests.push({ category,discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ set:set.name,sort_by:"gain_30day",sort_order:"asc",page:1,page_size:VINTAGE_RESULTS_PER_SET } });
+    vintageRequests.push({ category,discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ set:set.name,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:VINTAGE_RESULTS_PER_SET } });
+  }
+  const vintageResponses = await runDiscoveryRequests(vintageRequests);
   const candidates = new Map<string,Candidate>();
+  const addCandidate = (card:CardSearchItem,discoveryKind:DiscoveryKind) => {
+    const existing = candidates.get(card.card_id);
+    if (existing) {
+      if (!existing.discoveryKinds.includes(discoveryKind)) existing.discoveryKinds.push(discoveryKind);
+    } else {
+      candidates.set(card.card_id,{ ...card,discoveryKinds:[discoveryKind] });
+    }
+  };
   for (let rank = 0; rank < RESULTS_PER_BUCKET; rank += 1) {
-    for (let index = 0; index < responses.length; index += 1) {
-      const card = responses[index]?.cards?.[rank];
+    for (let index = 0; index < modernResponses.length; index += 1) {
+      const card = modernResponses[index]?.cards?.[rank];
       if (!card) continue;
-      const existing = candidates.get(card.card_id);
-      if (existing) {
-        if (!existing.discoveryKinds.includes(requests[index].discoveryKind)) existing.discoveryKinds.push(requests[index].discoveryKind);
-      } else {
-        candidates.set(card.card_id,{ ...card,discoveryKinds:[requests[index].discoveryKind] });
-      }
+      addCandidate(card,modernRequests[index].discoveryKind);
     }
   }
-  return [...candidates.values()];
+
+  const eligibleVintageResponses = vintageResponses.map((response) => (response.cards ?? [])
+    .filter((card) => isVintageCard(card) && hasVintageSalesVolume(card)));
+  const verifiedVintageIds = new Set(eligibleVintageResponses.flatMap((cards) => cards.map((card) => card.card_id)));
+  const selectedVintageIds = new Set<string>();
+  for (let rank = 0; rank < VINTAGE_RESULTS_PER_SET && selectedVintageIds.size < MAX_VINTAGE_CANDIDATES; rank += 1) {
+    for (const cards of eligibleVintageResponses) {
+      const card = cards[rank];
+      if (!card || selectedVintageIds.has(card.card_id)) continue;
+      selectedVintageIds.add(card.card_id);
+      addCandidate(card,"vintage_mover");
+      if (selectedVintageIds.size === MAX_VINTAGE_CANDIDATES) break;
+    }
+  }
+  const rawVintageCards = vintageResponses.reduce((count,response) => count + (response.cards?.length ?? 0),0);
+  return {
+    candidates:[...candidates.values()],
+    stats:{
+      vintageSetSearchMatches:vintageSetResult.rawSetCount,
+      verifiedVintageSets:vintageSetResult.sets.length,
+      rawVintageCards,verifiedVintageCards:verifiedVintageIds.size,
+      selectedVintageCards:selectedVintageIds.size,
+    },
+  };
 }
 
 function storyScore(facts: MarketFacts, kind: MarketStoryKind) {
@@ -454,15 +558,55 @@ async function mapWithConcurrency<T,U>(items: T[], concurrency: number, mapper: 
   return results;
 }
 
+async function reportSyncStage(
+  runId:number,stage:string,message:string,seen = 0,written = 0,details:Record<string,unknown> = {},
+) {
+  console.info(JSON.stringify({ level:"info",message,source:"cardhedge",runId,stage,seen,written,...details }));
+  try {
+    await updateSyncProgress(runId,message,seen,written);
+  } catch (error) {
+    console.warn(JSON.stringify({
+      level:"warn",message:"Unable to persist Card Hedge sync progress",source:"cardhedge",runId,stage,
+      error:error instanceof Error ? error.message : "Unknown error",
+    }));
+  }
+}
+
 export async function syncMarketData() {
   if (!cardHedgeConfigured()) return { status:"skipped", seen:0, written:0, message:"Waiting for CARDHEDGE_API_KEY" };
-  const runId = await beginSync("cardhedge");
+  const startedAt = Date.now();
+  const runId = await beginSync("cardhedge","Searching Card Hedge for market candidates…");
+  let seen = 0;
+  let written = 0;
   try {
-    const candidates = await discoverCandidates();
+    await reportSyncStage(runId,"discovery","Searching Card Hedge for modern and verified pre-1980 sets…");
+    const discovery = await discoverCandidates();
+    const candidates = discovery.candidates;
+    seen = candidates.length;
+    await reportSyncStage(
+      runId,"valuation",
+      "Confirmed " + candidates.length + " candidates, including " + discovery.stats.selectedVintageCards + " vintage. Checking grades and valuations…",
+      candidates.length,0,discovery.stats,
+    );
     const enriched = await mapWithConcurrency(candidates,ENRICH_CONCURRENCY,enrichCandidate);
-    const stories = selectStories(enriched.flatMap((item) => item.facts ? [item.facts] : []));
+    const qualified = enriched.flatMap((item) => item.facts ? [item.facts] : []);
     const rejected = enriched.filter((item) => !item.facts);
+    await reportSyncStage(
+      runId,"selection",
+      "Quality checks complete: " + qualified.length + " verified and " + rejected.length + " rejected. Selecting feed stories…",
+      candidates.length,0,{ qualified:qualified.length,rejected:rejected.length },
+    );
+    const stories = selectStories(qualified);
+    await reportSyncStage(
+      runId,"publishing","Publishing " + stories.length + " verified market stories…",
+      candidates.length,0,{ selected:stories.length },
+    );
     for (const story of stories) await upsertMarketStory(story);
+    written = stories.length;
+    await reportSyncStage(
+      runId,"cleanup","Published " + stories.length + " stories. Removing stale feed entries…",
+      candidates.length,stories.length,
+    );
     const deleted = stories.length >= 5 ? await deleteMarketStoriesExcept(stories.map((story) => story.cardId)) : 0;
     const reasonCounts = rejected.reduce<Record<string,number>>((counts,item) => {
       const reason = item.reason ?? "unknown quality rejection";
@@ -477,13 +621,21 @@ export async function syncMarketData() {
       counts[story.grade] = (counts[story.grade] ?? 0) + 1;
       return counts;
     },{});
-    console.info("[cardhedge] quality review",{ seen:candidates.length,published:stories.length,rejected:rejected.length,deleted,reasonCounts,typeCounts,vintageGradeCounts });
+    console.info(JSON.stringify({
+      level:"info",message:"Card Hedge quality review",source:"cardhedge",runId,stage:"complete",
+      durationMs:Date.now() - startedAt,seen:candidates.length,published:stories.length,rejected:rejected.length,
+      deleted,reasonCounts,typeCounts,vintageGradeCounts,discovery:discovery.stats,
+    }));
     const message = "Card Hedge sync completed: " + stories.length + " published, " + rejected.length + " rejected, " + deleted + " stale removed";
     await finishSync(runId,"success",candidates.length,stories.length,message);
     return { status:"success", seen:candidates.length, written:stories.length, rejected:rejected.length, deleted, message };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Card Hedge error";
-    await finishSync(runId,"failed",0,0,message);
+    console.error(JSON.stringify({
+      level:"error",message:"Card Hedge sync failed",source:"cardhedge",runId,stage:"failed",
+      durationMs:Date.now() - startedAt,seen,written,error:message,
+    }));
+    await finishSync(runId,"failed",seen,written,message);
     throw error;
   }
 }
