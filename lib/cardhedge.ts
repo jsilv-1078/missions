@@ -28,7 +28,10 @@ type MarketFacts = Omit<MarketStory,"id" | "type" | "storyKind" | "headline" | "
 
 const API_BASE = "https://api.cardhedger.com";
 const CATEGORIES = ["Baseball", "Basketball", "Football", "Hockey", "Soccer", "Pokemon"];
-const VINTAGE_SEARCH_TERMS = ["197", "196", "195", "194"];
+const VINTAGE_SEARCH_BUCKETS = [
+  { search:"197",pageSize:3 },{ search:"196",pageSize:3 },{ search:"195",pageSize:3 },{ search:"194",pageSize:3 },
+  { search:"193",pageSize:2 },{ search:"192",pageSize:2 },{ search:"191",pageSize:2 },{ search:"190",pageSize:2 },
+];
 const RESULTS_PER_BUCKET = 3;
 const SEARCH_CONCURRENCY = 6;
 const MAX_PUBLISHED_STORIES = 30;
@@ -48,7 +51,7 @@ const MAX_SURGE_MULTIPLE = 10;
 const MIN_SURGE_7_DAY_SALES = 4;
 const TRUSTED_CONFIDENCE = new Set(["A","B"]);
 const STORY_KINDS:MarketStoryKind[] = [
-  "high_sales_30d","biggest_gain","biggest_loss","vintage_mover","recent_sale","grade_gap","sales_surge","rookie_watch",
+  "high_sales_30d","vintage_mover","biggest_gain","biggest_loss","recent_sale","grade_gap","sales_surge","rookie_watch",
 ];
 
 export function cardHedgeConfigured() {
@@ -178,6 +181,8 @@ function rejection(card: Candidate, reason: string) {
 
 async function enrichCandidate(card: Candidate) {
   const year = cardYear(card);
+  const vintageOnly = card.discoveryKinds.length === 1 && card.discoveryKinds[0] === "vintage_mover";
+  if (vintageOnly && (year < 1800 || year >= 1980)) return rejection(card,"vintage search did not resolve to a pre-1980 set");
   const selected = pickGrade(card);
   const sales30d = Number(card["30 Day Sales"] ?? 0);
   const sales7d = Number(card["7 Day Sales"] ?? 0);
@@ -192,6 +197,7 @@ async function enrichCandidate(card: Candidate) {
   const change30d = Number(card.gain_30day ?? card.gain ?? 0);
   if (!Number.isFinite(change7d) || Math.abs(change7d) > MAX_ABS_CHANGE_7D) return rejection(card,"extreme 7-day percentage change");
   if (!Number.isFinite(change30d) || Math.abs(change30d) > MAX_ABS_CHANGE_30D) return rejection(card,"extreme 30-day percentage change");
+  if (vintageOnly && Math.abs(change30d) < MIN_MEANINGFUL_CHANGE) return rejection(card,"no meaningful vintage price move");
 
   const grade = selected.grade;
   const [historyResult, fmvResult, compsResult] = await Promise.allSettled([
@@ -239,7 +245,7 @@ async function enrichCandidate(card: Candidate) {
     eligibleKinds.push("sales_surge");
   }
   if (Boolean(card.rookie)) eligibleKinds.push("rookie_watch");
-  if (card.discoveryKinds.includes("vintage_mover") && year >= 1800 && year < 1980 && Math.abs(change30d) >= MIN_MEANINGFUL_CHANGE) {
+  if (year >= 1800 && year < 1980 && Math.abs(change30d) >= MIN_MEANINGFUL_CHANGE) {
     eligibleKinds.push("vintage_mover");
   }
   if (!eligibleKinds.length) return rejection(card,"no eligible market story format");
@@ -268,10 +274,10 @@ async function discoverCandidates() {
     requests.push({ category,discoveryKind:"high_sales_30d",path:"/v1/cards/search-cards-wsort",body:{ category,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
     requests.push({ category,discoveryKind:"rookie_watch",path:"/v1/cards/card-search",body:{ category,rookie:"yes",page:1,page_size:RESULTS_PER_BUCKET } });
   }
-  for (const search of VINTAGE_SEARCH_TERMS) {
-    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"gain_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
-    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"gain_30day",sort_order:"asc",page:1,page_size:RESULTS_PER_BUCKET } });
-    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
+  for (const { search,pageSize } of VINTAGE_SEARCH_BUCKETS) {
+    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"gain_30day",sort_order:"desc",page:1,page_size:pageSize } });
+    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"gain_30day",sort_order:"asc",page:1,page_size:pageSize } });
+    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:pageSize } });
   }
   const responses = await mapWithConcurrency(requests,SEARCH_CONCURRENCY,async (item) => {
     try {
