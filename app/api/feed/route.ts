@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const requested = Number(request.nextUrl.searchParams.get("limit") ?? 30);
   const requestedOffset = Number(request.nextUrl.searchParams.get("offset") ?? 0);
-  const limit = Math.min(30,Math.max(1,Number.isFinite(requested) ? requested : 12));
+  const limit = Math.min(120,Math.max(1,Number.isFinite(requested) ? requested : 12));
   const offset = Math.min(1000,Math.max(0,Number.isFinite(requestedOffset) ? requestedOffset : 0));
   const stories = await getFeedStories(limit,offset);
   return NextResponse.json({
