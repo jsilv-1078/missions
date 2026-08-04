@@ -128,14 +128,11 @@ async function upsertNewsStory(story: NewsStory, initialize = true) {
   ]);
 }
 
-function marketRow(row: Record<string, unknown>): MarketStory {
-  const storedHeadline = String(row.headline);
-  const headline = storedHeadline.endsWith(" card draws heavy collector activity")
-    ? marketHeadline({
-      cardId:String(row.card_id), player:String(row.player), storyKind:row.story_kind as MarketStory["storyKind"],
-      change30d:Number(row.change_30d), sales30d:Number(row.sales_30d),
-    })
-    : storedHeadline;
+function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
+  const headline = marketHeadline({
+    cardId:String(row.card_id), player:String(row.player), storyKind:row.story_kind as MarketStory["storyKind"],
+    change30d:Number(row.change_30d), sales30d:Number(row.sales_30d), variant,
+  });
   return {
     id:String(row.id), type:"market", storyKind:row.story_kind as MarketStory["storyKind"],
     player:String(row.player), sport:String(row.sport), headline, summary:String(row.summary),
@@ -178,7 +175,7 @@ export async function getFeedStories(limit = 30, offset = 0): Promise<FeedStory[
       getSql().query("SELECT * FROM market_stories ORDER BY updated_at DESC LIMIT $1", [fetchLimit]),
       getSql().query("SELECT * FROM news_stories WHERE status='published' ORDER BY published_at DESC LIMIT $1", [fetchLimit]),
     ]);
-    return interleave(markets.map(marketRow), news.map(newsRow)).slice(offset,offset + limit);
+    return interleave(markets.map((row,index) => marketRow(row,index)), news.map(newsRow)).slice(offset,offset + limit);
   } catch (error) {
     console.error("Pulse database read failed", error);
     return [];
