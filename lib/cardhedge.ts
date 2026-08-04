@@ -21,8 +21,9 @@ type CardSearchItem = {
 type Candidate = CardSearchItem & { storyKind: MarketStory["storyKind"] };
 
 const API_BASE = "https://api.cardhedger.com";
-const CATEGORIES = ["Baseball", "Basketball", "Football"];
-const RESULTS_PER_BUCKET = 5;
+const CATEGORIES = ["Baseball", "Basketball", "Football", "Hockey", "Soccer", "Pokemon"];
+const RESULTS_PER_BUCKET = 3;
+const SEARCH_CONCURRENCY = 6;
 const MAX_PUBLISHED_STORIES = 30;
 const ENRICH_CONCURRENCY = 4;
 const MIN_30_DAY_SALES = 5;
@@ -60,6 +61,10 @@ function normalizedImage(value: string) {
   } catch {
     return null;
   }
+}
+
+function displayCategory(value: string) {
+  return value === "Pokemon" ? "Pokémon" : value;
 }
 
 function pickGrade(card: CardSearchItem) {
@@ -171,7 +176,7 @@ async function enrichCandidate(card: Candidate) {
 
   return { story:{
     id:"market-" + card.card_id, type:"market", storyKind:card.storyKind,
-    player:card.player || "Unknown player", sport:card.category || "Sports Cards",
+    player:card.player || "Unknown player", sport:displayCategory(card.category || "Sports Cards"),
     headline:marketHeadline({ cardId:card.card_id,player:card.player || "Unknown player",storyKind:card.storyKind,change30d,sales30d }), summary:summary(card,sales30d),
     cardId:card.card_id, cardTitle:card.description, imageUrl,
     grade, currentValue, change7d, change30d, sales7d:Number(card["7 Day Sales"] ?? 0), sales30d,
@@ -180,13 +185,20 @@ async function enrichCandidate(card: Candidate) {
 }
 
 async function discoverCandidates() {
-  const requests: Array<{ storyKind:MarketStory["storyKind"]; request:Promise<{ cards?: CardSearchItem[] }> }> = [];
+  const requests: Array<{ category:string; storyKind:MarketStory["storyKind"]; body:Record<string,unknown> }> = [];
   for (const category of CATEGORIES) {
-    requests.push({ storyKind:"gain", request:cardHedgeFetch("/v1/cards/search-cards-wsort", { category, sort_by:"gain_30day", sort_order:"desc", page:1, page_size:RESULTS_PER_BUCKET }) });
-    requests.push({ storyKind:"decline", request:cardHedgeFetch("/v1/cards/search-cards-wsort", { category, sort_by:"gain_30day", sort_order:"asc", page:1, page_size:RESULTS_PER_BUCKET }) });
-    requests.push({ storyKind:"volume", request:cardHedgeFetch("/v1/cards/search-cards-wsort", { category, sort_by:"sales_30day", sort_order:"desc", page:1, page_size:RESULTS_PER_BUCKET }) });
+    requests.push({ category,storyKind:"gain",body:{ category,sort_by:"gain_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
+    requests.push({ category,storyKind:"decline",body:{ category,sort_by:"gain_30day",sort_order:"asc",page:1,page_size:RESULTS_PER_BUCKET } });
+    requests.push({ category,storyKind:"volume",body:{ category,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
   }
-  const responses = await Promise.all(requests.map((item) => item.request));
+  const responses = await mapWithConcurrency(requests,SEARCH_CONCURRENCY,async (item) => {
+    try {
+      return await cardHedgeFetch<{ cards?:CardSearchItem[] }>("/v1/cards/search-cards-wsort",item.body);
+    } catch (error) {
+      console.warn("[cardhedge] category search failed",{ category:item.category,storyKind:item.storyKind,error:error instanceof Error ? error.message : "Unknown error" });
+      return { cards:[] };
+    }
+  });
   const candidates: Candidate[] = [];
   for (let rank = 0; rank < RESULTS_PER_BUCKET; rank += 1) {
     for (let index = 0; index < responses.length; index += 1) {
@@ -195,6 +207,25 @@ async function discoverCandidates() {
     }
   }
   return [...new Map(candidates.map((card) => [card.card_id,card])).values()];
+}
+
+function balanceCategories(stories: MarketStory[]) {
+  const displayCategories = CATEGORIES.map(displayCategory);
+  const queues = new Map(displayCategories.map((category) => [category,stories.filter((story) => story.sport === category)]));
+  const balanced: MarketStory[] = [];
+  while (balanced.length < MAX_PUBLISHED_STORIES) {
+    let added = false;
+    for (const category of displayCategories) {
+      const story = queues.get(category)?.shift();
+      if (!story) continue;
+      balanced.push(story);
+      added = true;
+      if (balanced.length === MAX_PUBLISHED_STORIES) break;
+    }
+    if (!added) break;
+  }
+  const selected = new Set(balanced.map((story) => story.id));
+  return [...balanced,...stories.filter((story) => !selected.has(story.id))].slice(0,MAX_PUBLISHED_STORIES);
 }
 
 async function mapWithConcurrency<T,U>(items: T[], concurrency: number, mapper: (item:T) => Promise<U>) {
@@ -216,7 +247,7 @@ export async function syncMarketData() {
   try {
     const candidates = await discoverCandidates();
     const enriched = await mapWithConcurrency(candidates,ENRICH_CONCURRENCY,enrichCandidate);
-    const stories = enriched.flatMap((item) => item.story ? [item.story] : []).slice(0,MAX_PUBLISHED_STORIES);
+    const stories = balanceCategories(enriched.flatMap((item) => item.story ? [item.story] : []));
     const rejected = enriched.filter((item) => !item.story);
     for (const story of stories) await upsertMarketStory(story);
     const deleted = stories.length >= 5 ? await deleteMarketStoriesExcept(stories.map((story) => story.cardId)) : 0;
