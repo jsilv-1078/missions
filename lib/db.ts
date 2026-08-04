@@ -241,9 +241,23 @@ export async function listNewsStories() {
   return (await getSql().query("SELECT * FROM news_stories ORDER BY published_at DESC LIMIT 100")).map(newsRow);
 }
 
+export async function updateNewsStory(id: string, input: NewArticleInput) {
+  await ensureSchema();
+  const rows = await getSql().query([
+    "UPDATE news_stories SET article_url=$2,source=$3,headline=$4,summary=$5,image_url=$6,player=$7,",
+    "sport=$8,category=$9,published_at=$10,related_card_id=$11,status='published',demo=FALSE,updated_at=NOW()",
+    "WHERE id=$1 RETURNING *",
+  ].join(" "), [
+    id,input.articleUrl,input.source,input.headline,input.summary,input.imageUrl,input.player,input.sport,
+    input.category,new Date(input.publishedAt).toISOString(),input.relatedCardId ?? null,
+  ]);
+  return rows[0] ? newsRow(rows[0]) : null;
+}
+
 export async function deleteNewsStory(id: string) {
   await ensureSchema();
-  await getSql().query("DELETE FROM news_stories WHERE id=$1", [id]);
+  const rows = await getSql().query("DELETE FROM news_stories WHERE id=$1 RETURNING id", [id]);
+  return rows.length > 0;
 }
 
 export async function beginSync(source: string, message = "Sync started") {
