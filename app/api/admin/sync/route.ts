@@ -3,7 +3,7 @@ import { adminAuthorized } from "@/lib/admin";
 import { syncMarketData } from "@/lib/cardhedge";
 import { getLatestSyncRun } from "@/lib/db";
 
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 export async function GET(request: NextRequest) {
   const auth = adminAuthorized(request);
