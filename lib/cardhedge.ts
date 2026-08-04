@@ -19,7 +19,7 @@ type CardSearchItem = {
   prices?: Array<{ grade: string; price: string }>;
 };
 
-type DiscoveryKind = "high_sales_30d" | "biggest_gain" | "biggest_loss" | "rookie_watch";
+type DiscoveryKind = "high_sales_30d" | "biggest_gain" | "biggest_loss" | "rookie_watch" | "vintage_mover";
 type Candidate = CardSearchItem & { discoveryKinds: DiscoveryKind[] };
 
 type MarketFacts = Omit<MarketStory,"id" | "type" | "storyKind" | "headline" | "summary" | "demo"> & {
@@ -28,6 +28,7 @@ type MarketFacts = Omit<MarketStory,"id" | "type" | "storyKind" | "headline" | "
 
 const API_BASE = "https://api.cardhedger.com";
 const CATEGORIES = ["Baseball", "Basketball", "Football", "Hockey", "Soccer", "Pokemon"];
+const VINTAGE_SEARCH_TERMS = ["197", "196", "195", "194"];
 const RESULTS_PER_BUCKET = 3;
 const SEARCH_CONCURRENCY = 6;
 const MAX_PUBLISHED_STORIES = 30;
@@ -47,7 +48,7 @@ const MAX_SURGE_MULTIPLE = 10;
 const MIN_SURGE_7_DAY_SALES = 4;
 const TRUSTED_CONFIDENCE = new Set(["A","B"]);
 const STORY_KINDS:MarketStoryKind[] = [
-  "high_sales_30d","biggest_gain","biggest_loss","recent_sale","grade_gap","sales_surge","rookie_watch",
+  "high_sales_30d","biggest_gain","biggest_loss","vintage_mover","recent_sale","grade_gap","sales_surge","rookie_watch",
 ];
 
 export function cardHedgeConfigured() {
@@ -80,6 +81,15 @@ function normalizedImage(value: string) {
 
 function displayCategory(value: string) {
   return value === "Pokemon" ? "Pokémon" : value;
+}
+
+function yearFrom(value: string) {
+  const match = String(value ?? "").match(/\b(18\d{2}|19\d{2}|20\d{2})\b/);
+  return match ? Number(match[1]) : 0;
+}
+
+function cardYear(card: CardSearchItem) {
+  return yearFrom(card.set) || yearFrom(card.description);
 }
 
 function pickGrade(card: CardSearchItem) {
@@ -167,6 +177,7 @@ function rejection(card: Candidate, reason: string) {
 }
 
 async function enrichCandidate(card: Candidate) {
+  const year = cardYear(card);
   const selected = pickGrade(card);
   const sales30d = Number(card["30 Day Sales"] ?? 0);
   const sales7d = Number(card["7 Day Sales"] ?? 0);
@@ -228,6 +239,9 @@ async function enrichCandidate(card: Candidate) {
     eligibleKinds.push("sales_surge");
   }
   if (Boolean(card.rookie)) eligibleKinds.push("rookie_watch");
+  if (card.discoveryKinds.includes("vintage_mover") && year >= 1800 && year < 1980 && Math.abs(change30d) >= MIN_MEANINGFUL_CHANGE) {
+    eligibleKinds.push("vintage_mover");
+  }
   if (!eligibleKinds.length) return rejection(card,"no eligible market story format");
 
   const updatedAt = new Date().toISOString();
@@ -239,7 +253,7 @@ async function enrichCandidate(card: Candidate) {
   return { facts:{
     player:card.player || "Unknown player", sport:displayCategory(card.category || "Sports Cards"),
     cardId:card.card_id, cardTitle:card.description, imageUrl, grade, currentValue, change7d, change30d,
-    sales7d, sales30d, confidenceGrade, freshnessDays, chart, comps, rookie:Boolean(card.rookie),
+    sales7d, sales30d, confidenceGrade, freshnessDays, chart, comps, rookie:Boolean(card.rookie), cardYear:year,
     gradePrices:gap.prices, gradeGapMultiple:gap.multiple,
     salesPaceMultiple:Number.isFinite(salesPaceMultiple) ? salesPaceMultiple : 0,
     previous23DaySales, recentSale, updatedAt, eligibleKinds,
@@ -253,6 +267,11 @@ async function discoverCandidates() {
     requests.push({ category,discoveryKind:"biggest_loss",path:"/v1/cards/search-cards-wsort",body:{ category,sort_by:"gain_30day",sort_order:"asc",page:1,page_size:RESULTS_PER_BUCKET } });
     requests.push({ category,discoveryKind:"high_sales_30d",path:"/v1/cards/search-cards-wsort",body:{ category,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
     requests.push({ category,discoveryKind:"rookie_watch",path:"/v1/cards/card-search",body:{ category,rookie:"yes",page:1,page_size:RESULTS_PER_BUCKET } });
+  }
+  for (const search of VINTAGE_SEARCH_TERMS) {
+    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"gain_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
+    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"gain_30day",sort_order:"asc",page:1,page_size:RESULTS_PER_BUCKET } });
+    requests.push({ category:"Vintage " + search + "0s",discoveryKind:"vintage_mover",path:"/v1/cards/search-cards-wsort",body:{ search,sort_by:"sales_30day",sort_order:"desc",page:1,page_size:RESULTS_PER_BUCKET } });
   }
   const responses = await mapWithConcurrency(requests,SEARCH_CONCURRENCY,async (item) => {
     try {
@@ -282,6 +301,7 @@ function storyScore(facts: MarketFacts, kind: MarketStoryKind) {
   if (kind === "high_sales_30d" || kind === "rookie_watch") return facts.sales30d;
   if (kind === "biggest_gain") return facts.change30d;
   if (kind === "biggest_loss") return Math.abs(facts.change30d);
+  if (kind === "vintage_mover") return Math.abs(facts.change30d);
   if (kind === "recent_sale") return facts.recentSale ? Date.parse(facts.recentSale.date) : 0;
   if (kind === "grade_gap") return facts.gradeGapMultiple;
   return facts.salesPaceMultiple;
@@ -292,6 +312,7 @@ function summaryFor(facts: MarketFacts, kind: MarketStoryKind) {
   if (kind === "high_sales_30d") return descriptor + facts.sales30d.toLocaleString() + " recorded sales over the last 30 days.";
   if (kind === "biggest_gain") return descriptor + "Current Card Hedge FMV is up " + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
   if (kind === "biggest_loss") return descriptor + "Current Card Hedge FMV is down " + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
+  if (kind === "vintage_mover") return descriptor + "This " + facts.cardYear + " issue is " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
   if (kind === "recent_sale" && facts.recentSale) return descriptor + "A comparable sale closed today at " + facts.recentSale.price.toLocaleString("en-US",{ style:"currency",currency:"USD" }) + (facts.recentSale.venue ? " via " + facts.recentSale.venue + "." : ".");
   if (kind === "grade_gap") return descriptor + facts.gradePrices[0].grade + " is priced at " + facts.gradeGapMultiple.toFixed(1) + "× " + facts.gradePrices[1].grade + " in the latest grade-level data.";
   if (kind === "sales_surge") return descriptor + "The last seven days are running at " + facts.salesPaceMultiple.toFixed(1) + "× the daily pace of the preceding 23 days.";
@@ -304,6 +325,7 @@ function buildStory(facts: MarketFacts, storyKind: MarketStoryKind):MarketStory 
     ...storyFacts, id:"market-" + facts.cardId, type:"market", storyKind,
     headline:marketHeadline({
       cardId:facts.cardId,player:facts.player,storyKind,change30d:facts.change30d,sales30d:facts.sales30d,
+      cardYear:facts.cardYear,
       gradePrices:facts.gradePrices,gradeGapMultiple:facts.gradeGapMultiple,
       salesPaceMultiple:facts.salesPaceMultiple,recentSale:facts.recentSale,
     }),

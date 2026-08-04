@@ -5,7 +5,8 @@ export type MarketStoryKind =
   | "recent_sale"
   | "grade_gap"
   | "sales_surge"
-  | "rookie_watch";
+  | "rookie_watch"
+  | "vintage_mover";
 
 export type MarketGradePrice = { grade: string; price: number };
 export type MarketSale = { date: string; price: number; venue?: string };
@@ -32,6 +33,7 @@ export type MarketStory = {
   chart: number[];
   comps: Array<{ date: string; price: number; venue?: string }>;
   rookie: boolean;
+  cardYear: number;
   gradePrices: MarketGradePrice[];
   gradeGapMultiple: number;
   salesPaceMultiple: number;

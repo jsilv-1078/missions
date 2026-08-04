@@ -6,6 +6,7 @@ type HeadlineInput = {
   storyKind:MarketStory["storyKind"];
   change30d:number;
   sales30d:number;
+  cardYear?:number;
   gradePrices?:MarketStory["gradePrices"];
   gradeGapMultiple?:number;
   salesPaceMultiple?:number;
@@ -27,7 +28,7 @@ function currency(value: number) {
 }
 
 export function marketHeadline({
-  cardId,player,storyKind,change30d,sales30d,gradePrices = [],gradeGapMultiple = 0,
+  cardId,player,storyKind,change30d,sales30d,cardYear = 0,gradePrices = [],gradeGapMultiple = 0,
   salesPaceMultiple = 0,recentSale,variant,
 }: HeadlineInput) {
   const change = Math.abs(change30d).toFixed(1);
@@ -92,6 +93,19 @@ export function marketHeadline({
     player + " RC logs " + sales + " sales in 30 days",
     "Collectors keep this " + player + " rookie in view",
   ],variant);
+
+  if (storyKind === "vintage_mover") {
+    const year = cardYear > 0 ? String(cardYear) : "Pre-1980";
+    const direction = change30d < 0 ? "down" : "up";
+    return stableChoice(seed,[
+      year + " " + player + " card moves " + direction + " " + change + "%",
+      "Vintage watch: " + player + " shifts " + change + "%",
+      player + "’s " + year + " card makes a vintage move",
+      "Pre-1980 market shifts for " + player,
+      year + " " + player + " issue changes " + change + "%",
+      "Collectors track a new move in this " + player + " vintage card",
+    ],variant);
+  }
 
   if (storyKind === "biggest_loss" || change30d < 0) return stableChoice(seed,[
     player + " card slips " + change + "% over 30 days",

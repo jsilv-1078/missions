@@ -103,6 +103,7 @@ export async function upsertMarketStory(story: MarketStory, initialize = true) {
     story.sales7d, story.sales30d, story.confidenceGrade, story.freshnessDays, JSON.stringify(story.chart),
     JSON.stringify(story.comps), JSON.stringify({
       rookie:story.rookie, gradePrices:story.gradePrices, gradeGapMultiple:story.gradeGapMultiple,
+      cardYear:story.cardYear,
       salesPaceMultiple:story.salesPaceMultiple, previous23DaySales:story.previous23DaySales,
       recentSale:story.recentSale,
     }), story.updatedAt, story.demo,
@@ -155,6 +156,7 @@ function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
   const headline = marketHeadline({
     cardId:String(row.card_id), player:String(row.player), storyKind,
     change30d:Number(row.change_30d), sales30d:Number(row.sales_30d), gradePrices,
+    cardYear:Number(meta.cardYear ?? 0),
     gradeGapMultiple:Number(meta.gradeGapMultiple ?? 0), salesPaceMultiple:Number(meta.salesPaceMultiple ?? 0),
     recentSale, variant,
   });
@@ -166,7 +168,7 @@ function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
     sales7d:Number(row.sales_7d), sales30d:Number(row.sales_30d), confidenceGrade:String(row.confidence_grade),
     freshnessDays:Number(row.freshness_days), chart:Array.isArray(row.chart) ? row.chart.map(Number) : [],
     comps:Array.isArray(row.comps) ? row.comps as MarketStory["comps"] : [],
-    rookie:Boolean(meta.rookie), gradePrices,
+    rookie:Boolean(meta.rookie), cardYear:Number(meta.cardYear ?? 0), gradePrices,
     gradeGapMultiple:Number(meta.gradeGapMultiple ?? 0), salesPaceMultiple:Number(meta.salesPaceMultiple ?? 0),
     previous23DaySales:Number(meta.previous23DaySales ?? Math.max(0,Number(row.sales_30d) - Number(row.sales_7d))),
     recentSale,

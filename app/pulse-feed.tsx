@@ -29,6 +29,7 @@ const MARKET_FORMATS:Record<MarketStoryKind,{ label:string;icon:string;cue:strin
   grade_gap:{ label:"GRADE GAP",icon:"G",cue:"COMPARE GRADES & PRICES" },
   sales_surge:{ label:"SALES SURGE",icon:"⚡",cue:"PACE & SALES BREAKDOWN" },
   rookie_watch:{ label:"ROOKIE WATCH",icon:"RC",cue:"ROOKIE MARKET DETAILS" },
+  vintage_mover:{ label:"VINTAGE MOVER",icon:"V",cue:"ERA, TREND & COMPS" },
 };
 
 function kindClass(kind: MarketStoryKind) {
@@ -74,6 +75,8 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
   }
 
   if (story.storyKind === "sales_surge") return <div className="market-stage surge-stage"><CardImage story={story}/><div className="surge-tally"><GradeStamp grade={story.grade}/><small>SALES PACE</small><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><b>FASTER</b><div><span><strong>{story.sales7d}</strong>LAST 7D</span><i>→</i><span><strong>{story.previous23DaySales}</strong>PRIOR 23D</span></div></div></div>;
+
+  if (story.storyKind === "vintage_mover") return <div className="market-stage vintage-stage"><div className="vintage-card-wrap"><span>PRE-1980</span><CardImage story={story}/></div><div className="vintage-tally"><GradeStamp grade={story.grade}/><small>VINTAGE ISSUE</small><strong>{story.cardYear || "PRE-80"}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>30-day move<br/>{currency(story.currentValue)} current FMV</span></div></div>;
 
   return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><GradeStamp grade={story.grade}/><small>ROOKIE FMV</small><strong>{currency(story.currentValue)}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>{story.sales30d} sales · 30 days</span></div></div>;
 }
@@ -133,6 +136,7 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
     return <><div className="surge-detail"><span>SALES VELOCITY</span><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><small>FASTER DAILY PACE</small><div><p><b>{priorDaily.toFixed(1)}</b><span>DAILY · PRIOR 23D</span></p><i>→</i><p><b>{recentDaily.toFixed(1)}</b><span>DAILY · LAST 7D</span></p></div></div><SalesContextGrid story={story} surge/></>;
   }
   if (story.storyKind === "rookie_watch") return <><div className="rookie-detail"><b>RC</b><div><span>ROOKIE CARD FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong><small>{story.sales30d} recorded sales in 30 days</small></div></div><LineChart values={story.chart} negative={negative}/><SalesContextGrid story={story}/></>;
+  if (story.storyKind === "vintage_mover") return <><div className="vintage-detail"><span>PRE-1980 ISSUE</span><strong>{story.cardYear || "VINTAGE"}</strong><div><p><small>CARD GRADE</small><b>{story.grade}</b></p><p><small>CURRENT FMV</small><b>{currency(story.currentValue)}</b></p></div><em className={negative ? "down" : "up"}>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}% OVER 30 DAYS</em></div><LineChart values={story.chart} negative={negative}/><MetricGrid story={story}/></>;
   return <><div className="detail-price"><span>30-DAY {story.storyKind === "biggest_loss" ? "PRICE LOSS" : "PRICE GAIN"} · {story.grade}</span><strong>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{currency(story.currentValue)} FMV</b></div><LineChart values={story.chart} negative={negative}/><MetricGrid story={story}/></>;
 }
 
