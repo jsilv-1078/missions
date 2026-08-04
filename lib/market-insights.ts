@@ -103,24 +103,24 @@ function playerSnapshots(markets: MarketStory[]) {
     .sort((a,b) => b.reduce((sum,story) => sum + story.sales30d,0) - a.reduce((sum,story) => sum + story.sales30d,0))
     .slice(0,5)
     .map((stories) => {
-      const ranked = [...stories].sort((a,b) => b.sales30d - a.sales30d).slice(0,3);
-      const totalSales = stories.reduce((sum,story) => sum + story.sales30d,0);
-      const totalWeight = stories.reduce((sum,story) => sum + Math.max(1,story.sales30d),0);
-      const averageChange = stories.reduce((sum,story) => sum + story.change30d * Math.max(1,story.sales30d),0) / totalWeight;
-      const primary = ranked[0];
+      const selected = [...stories].sort((a,b) => b.sales30d - a.sales30d).slice(0,3);
+      const totalSales = selected.reduce((sum,story) => sum + story.sales30d,0);
+      const totalWeight = selected.reduce((sum,story) => sum + Math.max(1,story.sales30d),0);
+      const averageChange = selected.reduce((sum,story) => sum + story.change30d * Math.max(1,story.sales30d),0) / totalWeight;
+      const primary = selected[0];
       return {
         ...primary,
         id:`auto-player-${slug(primary.player)}`,
         cardId:`auto-player-${slug(primary.player)}`,
         storyKind:"player_snapshot" as const,
-        headline:`${primary.player} market: ${stories.length} cards, ${totalSales.toLocaleString()} sales and ${signedPercent(averageChange)}`,
-        cardTitle:`${stories.length} tracked card markets · 30-day weighted direction`,
-        summary:`This snapshot combines ${stories.length} verified ${primary.player} card markets. The direction is weighted by each card's recorded 30-day sales so more actively traded cards carry more influence.`,
+        headline:`${primary.player} market: ${selected.length} cards, ${totalSales.toLocaleString()} sales and ${signedPercent(averageChange)}`,
+        cardTitle:`${selected.length} tracked card markets · 30-day weighted direction`,
+        summary:`This snapshot combines ${selected.length} verified ${primary.player} card markets. The direction is weighted by each card's recorded 30-day sales so more actively traded cards carry more influence.`,
         insight:{
-          cardsTracked:stories.length,
+          cardsTracked:selected.length,
           totalSales30d:totalSales,
           averageChange30d:averageChange,
-          items:ranked.map(item),
+          items:selected.map(item),
         },
       };
     });
