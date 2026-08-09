@@ -297,10 +297,30 @@ function EmptyFeed() {
   </section>;
 }
 
-export function PulseFeed({ initialStories }: { initialStories: FeedStory[] }) {
+function WelcomeScreen({ start }: { start: () => void }) {
+  return <section className="pulse-intro" aria-labelledby="pulse-intro-title">
+    <header><PulseLogo/><span>YOUR HOBBY FEED</span></header>
+    <div className="intro-body">
+      <span className="intro-kicker">MARKET INTELLIGENCE · CURATED NEWS</span>
+      <h1 id="pulse-intro-title">Know what’s moving.</h1>
+      <p>See what’s moving, selling and making news in the cards you care about.</p>
+      <div className="intro-topics" aria-label="Pulse coverage">
+        <span>PRICE MOVES</span><span>RECENT SALES</span><span>CARD NEWS</span>
+      </div>
+      <div className="intro-controls" aria-label="How to use Pulse">
+        <article><b aria-hidden="true">↑</b><div><span>SCROLL UP</span><strong>NEXT STORY</strong></div></article>
+        <article><b aria-hidden="true">→</b><div><span>SWIPE RIGHT</span><strong>DETAILS &amp; STATS</strong></div></article>
+      </div>
+    </div>
+    <button className="intro-start" onClick={start}><span>START EXPLORING</span><b aria-hidden="true">→</b></button>
+  </section>;
+}
+
+export function PulseFeed({ initialStories,showIntroInitially = false }: { initialStories: FeedStory[]; showIntroInitially?: boolean }) {
   const cycleRef = useRef(0);
   const appendingRef = useRef(false);
   const sourceStories = useRef(initialStories);
+  const [showIntro,setShowIntro] = useState(showIntroInitially);
   const [entries,setEntries] = useState(() => initialStories.map((story,index) => ({
     instanceId:`0-${index}-${story.id}`,
     story,
@@ -328,6 +348,13 @@ export function PulseFeed({ initialStories }: { initialStories: FeedStory[] }) {
     const remaining = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
     if (remaining < feed.clientHeight * 3) appendRemixedCycle();
   }
+
+  function dismissIntro() {
+    document.cookie = "cm_pulse_intro_v1=seen; Path=/; Max-Age=31536000; SameSite=Lax";
+    setShowIntro(false);
+  }
+
+  if (showIntro) return <main className="app-shell"><WelcomeScreen start={dismissIntro}/></main>;
 
   return <main className="app-shell">
     <nav className="desktop-nav"><PulseLogo/><div><button className="active">For You</button><button>Market</button><button>News</button></div><a href="/admin/news">News Admin</a></nav>
