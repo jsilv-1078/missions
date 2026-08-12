@@ -5,14 +5,18 @@ const FORMAT_WINDOW = 8;
 const SPORT_WINDOW = 8;
 const CARD_WINDOW = 20;
 const PLAYER_EXPOSURE_PENALTY = 5000;
+const FOLLOWED_PLAYER_BONUS = 4500;
+const LESS_PLAYER_PENALTY = 9000;
 export const RECENT_CARD_COOLDOWN_MS = 72 * 60 * 60 * 1000;
 
 export type RemixFeedOptions = {
   recentCardTimestamps?: Record<string,number>;
+  followedPlayers?: string[];
+  lessPlayers?: string[];
   now?: number;
 };
 
-function normalized(value: string) {
+export function playerPreferenceKey(value: string) {
   return value.trim().toLocaleLowerCase();
 }
 
@@ -21,15 +25,15 @@ export function storyPlayerKeys(story: FeedStory) {
   if (story.type === "market") {
     players.push(...(story.insight?.items?.map((item) => item.player) ?? []));
   }
-  return [...new Set(players.map(normalized).filter(Boolean))];
+  return [...new Set(players.map(playerPreferenceKey).filter(Boolean))];
 }
 
 function formatKey(story: FeedStory) {
-  return story.type === "market" ? story.storyKind : `news:${normalized(story.category)}`;
+  return story.type === "market" ? story.storyKind : `news:${playerPreferenceKey(story.category)}`;
 }
 
 function sportKey(story: FeedStory) {
-  return normalized(story.sport);
+  return playerPreferenceKey(story.sport);
 }
 
 export function storyCardKeys(story: FeedStory) {
@@ -69,6 +73,13 @@ function cooldownPenalty(story: FeedStory, recentCardTimestamps: Record<string,n
     penalty = Math.max(penalty,2400 * (1 - age / RECENT_CARD_COOLDOWN_MS));
   }
   return penalty;
+}
+
+function playerPreferencePenalty(story: FeedStory, followedPlayers: Set<string>, lessPlayers: Set<string>) {
+  const playerKeys = storyPlayerKeys(story);
+  if (playerKeys.some((key) => lessPlayers.has(key))) return LESS_PLAYER_PENALTY;
+  if (playerKeys.some((key) => followedPlayers.has(key))) return -FOLLOWED_PLAYER_BONUS;
+  return 0;
 }
 
 function noveltyPenalty(
@@ -113,6 +124,8 @@ export function remixFeedStories(
   const ordered: FeedStory[] = [];
   const history = Array.isArray(previous) ? [...previous] : previous ? [previous] : [];
   const recentCardTimestamps = options.recentCardTimestamps ?? {};
+  const followedPlayers = new Set((options.followedPlayers ?? []).map(playerPreferenceKey).filter(Boolean));
+  const lessPlayers = new Set((options.lessPlayers ?? []).map(playerPreferenceKey).filter(Boolean));
   const now = options.now ?? Date.now();
   const playerExposureCounts = history.reduce<Map<string,number>>((counts,story) => {
     for (const key of storyPlayerKeys(story)) counts.set(key,(counts.get(key) ?? 0) + 1);
@@ -147,7 +160,9 @@ export function remixFeedStories(
       );
       const inventoryBonus = (remainingFormats.get(formatKey(story)) ?? 0) * 220;
       const penalty = noveltyPenalty(story,history,recentCardTimestamps,now)
-        + playerExposure * PLAYER_EXPOSURE_PENALTY - inventoryBonus;
+        + playerExposure * PLAYER_EXPOSURE_PENALTY
+        + playerPreferencePenalty(story,followedPlayers,lessPlayers)
+        - inventoryBonus;
       if (penalty >= selectedPenalty) continue;
       selectedIndex = index;
       selectedPenalty = penalty;

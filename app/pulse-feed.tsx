@@ -2,12 +2,34 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { RECENT_CARD_COOLDOWN_MS, remixFeedStories, storyCardKeys } from "@/lib/feed-order";
+import { playerPreferenceKey, RECENT_CARD_COOLDOWN_MS, remixFeedStories, storyCardKeys } from "@/lib/feed-order";
 import { storyRequiresCurrentValueDirection, valueDirectionIsCurrent } from "@/lib/market-freshness";
 import type { FeedStory, MarketInsightItem, MarketStory, MarketStoryKind, NewsStory } from "@/lib/types";
 
 function PulseLogo() {
   return <div className="pulse-logo" aria-label="Card Madness Pulse"><Image className="pulse-brand-mark" src="/card-madness-symbol.png" alt="" width={40} height={50}/><b>PULSE</b></div>;
+}
+
+type PreferenceAction = "follow" | "less";
+type PlayerPreferences = { version:1;followed:string[];less:string[] };
+type PreferenceChange = (player: string,action: PreferenceAction) => void;
+
+const EMPTY_PLAYER_PREFERENCES:PlayerPreferences = { version:1,followed:[],less:[] };
+
+function PreferenceControls({ player,preferences,onChange }: {
+  player:string;preferences:PlayerPreferences;onChange:PreferenceChange;
+}) {
+  const key = playerPreferenceKey(player);
+  const followed = preferences.followed.includes(key);
+  const less = preferences.less.includes(key);
+  return <div className="story-preferences" aria-label={`Feed preferences for ${player}`} onTouchStart={(event) => event.stopPropagation()} onTouchEnd={(event) => event.stopPropagation()}>
+    <button className={followed ? "preference-button follow active" : "preference-button follow"} type="button" aria-label={followed ? `Stop following ${player}` : `Follow ${player}`} aria-pressed={followed} title={followed ? `Following ${player}` : `Follow ${player}`} onClick={() => onChange(player,"follow")}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.5 6.3-.9L12 2.7Z"/></svg>
+    </button>
+    <button className={less ? "preference-button less active" : "preference-button less"} type="button" aria-label={less ? `Remove show less for ${player}` : `Show less of ${player}`} aria-pressed={less} title={less ? `Showing less of ${player}` : `Show less of ${player}`} onClick={() => onChange(player,"less")}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 3.5h8.2c1 0 1.8.6 2.1 1.5l2 6.1c.4 1.2-.5 2.4-1.7 2.4h-4.2l.6 3.1c.3 1.5-.5 3-1.8 3.7l-.8.4-3.8-7.2H4.7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2.8v9.5"/></svg>
+    </button>
+  </div>;
 }
 
 function currency(value: number) {
@@ -193,7 +215,7 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
   return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><GradeStamp grade={story.grade}/><small>{story.grade} EST. VALUE</small><strong>{currency(story.currentValue)}</strong>{currentDirection ? <b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b> : <b>{story.sales30d} SALES</b>}<span>{currentDirection ? "Card-wide 30-day move" : "All grades · 30 days"}</span></div></div>;
 }
 
-function PlayerIndexFront({ story, open }: { story: MarketStory;open: () => void }) {
+function PlayerIndexFront({ story, open,preferenceControls }: { story: MarketStory;open: () => void;preferenceControls?:React.ReactNode }) {
   const insight = story.insight;
   const feature = playerIndexFeature(story);
   const averageSale = compactCurrency(insight?.averageSale30d ?? 0);
@@ -204,7 +226,7 @@ function PlayerIndexFront({ story, open }: { story: MarketStory;open: () => void
       : [{ label:"TRADED VALUE",value:compactCurrency(insight?.totalValue30d ?? 0) },{ label:"RECORDED SALES",value:compactNumber(insight?.totalSales30d ?? 0) }];
   return <section className="story-face market-face market-player-index player-index-front">
     <header><PulseLogo/><span className="live-pill" title={marketFreshnessDescription(story)} aria-label={marketFreshnessDescription(story)}>{marketFreshnessLabel(story)}</span></header>
-    <div className="player-index-type"><b aria-hidden="true">PI</b><div><span>PLAYER INDEX</span><strong>30-DAY MARKET VIEW</strong></div></div>
+    <div className="player-index-type"><b aria-hidden="true">PI</b><div className="type-copy"><span>PLAYER INDEX</span><strong>30-DAY MARKET VIEW</strong></div>{preferenceControls}</div>
     <div className="player-index-hero">
       <PlayerIndexPortrait key={story.imageUrl} story={story}/>
       <div className="player-index-hero-shade"/>
@@ -224,14 +246,14 @@ function PlayerIndexFront({ story, open }: { story: MarketStory;open: () => void
   </section>;
 }
 
-function MarketFront({ story, open }: { story: MarketStory; open: () => void }) {
-  if (story.storyKind === "player_index") return <PlayerIndexFront story={story} open={open}/>;
+function MarketFront({ story, open,preferenceControls }: { story: MarketStory; open: () => void;preferenceControls?:React.ReactNode }) {
+  if (story.storyKind === "player_index") return <PlayerIndexFront story={story} open={open} preferenceControls={preferenceControls}/>;
   const format = marketFormat(story);
   const styleClass = kindClass(story.storyKind);
   const showCardTitle = !["player_index","player_snapshot","market_matchup"].includes(story.storyKind);
   return <section className={"story-face market-face " + styleClass}>
     <header><PulseLogo/><span className="live-pill" title={marketFreshnessDescription(story)} aria-label={marketFreshnessDescription(story)}>{marketFreshnessLabel(story)}</span></header>
-    <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
+    <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div className="type-copy"><span>MARKET DATA</span><strong>{format.label}</strong></div>{preferenceControls}</div>
     <h1>{story.headline}</h1>
     <MarketFrontVisual story={story}/>
     {showCardTitle ? <p className="market-card-title">{story.cardTitle}</p> : null}
@@ -239,10 +261,10 @@ function MarketFront({ story, open }: { story: MarketStory; open: () => void }) 
   </section>;
 }
 
-function NewsFront({ story, open }: { story: NewsStory; open: () => void }) {
+function NewsFront({ story, open,preferenceControls }: { story: NewsStory; open: () => void;preferenceControls?:React.ReactNode }) {
   return <section className="story-face news-face">
     <header><PulseLogo/><span className="live-pill">CURATED</span></header>
-    <div className="type-banner news-banner"><b>N</b><div><span>{newsTypeLabel(story)}</span><strong>{story.category}</strong></div></div>
+    <div className="type-banner news-banner"><b>N</b><div className="type-copy"><span>{newsTypeLabel(story)}</span><strong>{story.category}</strong></div>{preferenceControls}</div>
     <h1>{story.headline}</h1>
     <div className="news-hero">
       <Image src={story.imageUrl} alt={story.player} fill sizes="(max-width: 799px) 100vw, 45vw"/>
@@ -417,9 +439,21 @@ function NewsDetail({ story, close }: { story: NewsStory; close: () => void }) {
   </section>;
 }
 
-function Story({ story,previous }: { story: FeedStory;previous?: StoredMarketSnapshot }) {
+function preferencePlayer(story: FeedStory) {
+  if (story.type === "market" && story.storyKind === "market_matchup") return null;
+  if (story.type === "news" && ["HOBBY NEWS","INDUSTRY NEWS","NEWS"].includes(newsTypeLabel(story))) return null;
+  return story.player.trim() || null;
+}
+
+function Story({ story,previous,preferences,onPreferenceChange }: {
+  story:FeedStory;previous?:StoredMarketSnapshot;preferences:PlayerPreferences;onPreferenceChange:PreferenceChange;
+}) {
   const [open,setOpen] = useState(false);
   const start = useRef<{x:number;y:number}|null>(null);
+  const player = preferencePlayer(story);
+  const preferenceControls = player
+    ? <PreferenceControls player={player} preferences={preferences} onChange={onPreferenceChange}/>
+    : null;
   const touchStart = (event: React.TouchEvent) => {
     const touch = event.touches[0];
     start.current = {x:touch.clientX,y:touch.clientY};
@@ -434,7 +468,7 @@ function Story({ story,previous }: { story: FeedStory;previous?: StoredMarketSna
   };
   return <article className={"pulse-story " + story.type + (open ? " open" : "")} onTouchStart={touchStart} onTouchEnd={touchEnd}>
     <div className="story-track">
-      {story.type === "market" ? <MarketFront story={story} open={() => setOpen(true)}/> : <NewsFront story={story} open={() => setOpen(true)}/>}
+      {story.type === "market" ? <MarketFront story={story} open={() => setOpen(true)} preferenceControls={preferenceControls}/> : <NewsFront story={story} open={() => setOpen(true)} preferenceControls={preferenceControls}/>}
       {story.type === "market" ? <MarketDetail story={story} close={() => setOpen(false)} previous={previous}/> : <NewsDetail story={story} close={() => setOpen(false)}/>}
     </div>
   </article>;
@@ -468,17 +502,42 @@ function WelcomeScreen({ start }: { start: () => void }) {
 
 const RECENT_CARD_STORAGE_KEY = "cm_pulse_recent_cards_v1";
 const MARKET_SNAPSHOT_STORAGE_KEY = "cm_pulse_market_snapshots_v1";
+const PLAYER_PREFERENCES_STORAGE_KEY = "cm_pulse_player_preferences_v1";
 const MARKET_SNAPSHOT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function playerPreferencesFromStorage(raw: string | null):PlayerPreferences {
+  if (!raw) return EMPTY_PLAYER_PREFERENCES;
+  try {
+    const parsed = JSON.parse(raw) as Partial<PlayerPreferences>;
+    const normalized = (values:unknown) => Array.isArray(values)
+      ? [...new Set(values.filter((value):value is string => typeof value === "string").map(playerPreferenceKey).filter(Boolean))].slice(0,100)
+      : [];
+    const followed = normalized(parsed.followed);
+    const followedSet = new Set(followed);
+    return { version:1,followed,less:normalized(parsed.less).filter((key) => !followedSet.has(key)) };
+  } catch {
+    return EMPTY_PLAYER_PREFERENCES;
+  }
+}
+
+function preferenceRemixOptions(preferences:PlayerPreferences) {
+  return { followedPlayers:preferences.followed,lessPlayers:preferences.less };
+}
 
 export function PulseFeed({ initialStories,showIntroInitially = false }: { initialStories: FeedStory[]; showIntroInitially?: boolean }) {
   const cycleRef = useRef(0);
   const appendingRef = useRef(false);
+  const activeIndexRef = useRef(0);
   const sourceStories = useRef(initialStories);
+  const playerPreferencesRef = useRef<PlayerPreferences>(EMPTY_PLAYER_PREFERENCES);
   const recentCardTimestamps = useRef<Record<string,number>>({});
   const storedMarketSnapshots = useRef<Record<string,StoredMarketSnapshot>>({});
   const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preferenceNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastViewedStoryId = useRef<string | null>(null);
   const [showIntro,setShowIntro] = useState(showIntroInitially);
+  const [playerPreferences,setPlayerPreferences] = useState<PlayerPreferences>(EMPTY_PLAYER_PREFERENCES);
+  const [preferenceNotice,setPreferenceNotice] = useState("");
   const [previousMarketSnapshots,setPreviousMarketSnapshots] = useState<Record<string,StoredMarketSnapshot>>({});
   const [entries,setEntries] = useState(() => initialStories.map((story,index) => ({
     instanceId:`0-${index}-${story.id}`,
@@ -507,13 +566,25 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
       storedMarketSnapshots.current = {};
       setPreviousMarketSnapshots({});
     }
-    const remixed = remixFeedStories(initialStories,undefined,{ recentCardTimestamps:recentCardTimestamps.current,now });
+    let storedPreferences = EMPTY_PLAYER_PREFERENCES;
+    try {
+      storedPreferences = playerPreferencesFromStorage(localStorage.getItem(PLAYER_PREFERENCES_STORAGE_KEY));
+    } catch {
+      storedPreferences = EMPTY_PLAYER_PREFERENCES;
+    }
+    playerPreferencesRef.current = storedPreferences;
+    setPlayerPreferences(storedPreferences);
+    const remixed = remixFeedStories(initialStories,undefined,{
+      recentCardTimestamps:recentCardTimestamps.current,now,...preferenceRemixOptions(storedPreferences),
+    });
     sourceStories.current = remixed;
     cycleRef.current = 0;
+    activeIndexRef.current = 0;
     setEntries(remixed.map((story,index) => ({ instanceId:`0-${index}-${story.id}`,story })));
     if (remixed[0]) scheduleStoryViewed(remixed[0]);
     return () => {
       if (viewTimer.current) clearTimeout(viewTimer.current);
+      if (preferenceNoticeTimer.current) clearTimeout(preferenceNoticeTimer.current);
     };
   },[initialStories,showIntro]);
 
@@ -540,6 +611,65 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
     viewTimer.current = setTimeout(() => markStoryViewed(story),800);
   }
 
+  function showPreferenceNotice(message:string) {
+    setPreferenceNotice(message);
+    if (preferenceNoticeTimer.current) clearTimeout(preferenceNoticeTimer.current);
+    preferenceNoticeTimer.current = setTimeout(() => setPreferenceNotice(""),2800);
+  }
+
+  function rerankUpcomingStories(preferences:PlayerPreferences) {
+    const nextCycleId = ++cycleRef.current;
+    setEntries((current) => {
+      if (!current.length) return current;
+      const activeIndex = Math.max(0,Math.min(activeIndexRef.current,current.length - 1));
+      const retained = current.slice(0,activeIndex + 1);
+      const history = retained.slice(-20).map((entry) => entry.story);
+      const upcoming = remixFeedStories(sourceStories.current,history,{
+        recentCardTimestamps:recentCardTimestamps.current,...preferenceRemixOptions(preferences),
+      });
+      return [...retained,...upcoming.map((story,index) => ({
+        instanceId:`preference-${nextCycleId}-${index}-${story.id}`,story,
+      }))];
+    });
+  }
+
+  function handlePreferenceChange(player:string,action:PreferenceAction) {
+    const key = playerPreferenceKey(player);
+    if (!key) return;
+    const followed = new Set(playerPreferencesRef.current.followed);
+    const less = new Set(playerPreferencesRef.current.less);
+    let enabled = false;
+    if (action === "follow") {
+      enabled = !followed.has(key);
+      if (enabled) {
+        followed.add(key);
+        less.delete(key);
+      } else {
+        followed.delete(key);
+      }
+    } else {
+      enabled = !less.has(key);
+      if (enabled) {
+        less.add(key);
+        followed.delete(key);
+      } else {
+        less.delete(key);
+      }
+    }
+    const next:PlayerPreferences = { version:1,followed:[...followed],less:[...less] };
+    playerPreferencesRef.current = next;
+    setPlayerPreferences(next);
+    try {
+      localStorage.setItem(PLAYER_PREFERENCES_STORAGE_KEY,JSON.stringify(next));
+    } catch {
+      // The in-memory preference still works when private browsing blocks storage.
+    }
+    rerankUpcomingStories(next);
+    showPreferenceNotice(action === "follow"
+      ? enabled ? `Following ${player}. Verified stories will be prioritized when available.` : `Follow removed for ${player}.`
+      : enabled ? `Showing less of ${player}.` : `Show less removed for ${player}.`);
+  }
+
   function appendRemixedCycle() {
     if (appendingRef.current || sourceStories.current.length === 0) return;
     appendingRef.current = true;
@@ -547,6 +677,7 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
       const recentHistory = current.slice(-20).map((entry) => entry.story);
       const nextCycle = remixFeedStories(sourceStories.current,recentHistory,{
         recentCardTimestamps:recentCardTimestamps.current,
+        ...preferenceRemixOptions(playerPreferencesRef.current),
       });
       cycleRef.current += 1;
       return [...current,...nextCycle.map((story,index) => ({
@@ -562,6 +693,7 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
   function handleScroll(event: React.UIEvent<HTMLElement>) {
     const feed = event.currentTarget;
     const visibleIndex = Math.max(0,Math.min(entries.length - 1,Math.round(feed.scrollTop / feed.clientHeight)));
+    activeIndexRef.current = visibleIndex;
     if (entries[visibleIndex]) scheduleStoryViewed(entries[visibleIndex].story);
     const remaining = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
     if (remaining < feed.clientHeight * 3) appendRemixedCycle();
@@ -577,8 +709,9 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
   return <main className="app-shell">
     <nav className="desktop-nav"><PulseLogo/><div><button className="active">For You</button><button>Market</button><button>News</button></div><a href="/admin/news">News Admin</a></nav>
     <section className="feed" aria-label="Pulse market and news feed" onScroll={handleScroll}>
-      {entries.length ? entries.map(({instanceId,story}) => <Story key={instanceId} story={story} previous={story.type === "market" ? previousMarketSnapshots[story.cardId] : undefined}/>) : <EmptyFeed/>}
+      {entries.length ? entries.map(({instanceId,story}) => <Story key={instanceId} story={story} previous={story.type === "market" ? previousMarketSnapshots[story.cardId] : undefined} preferences={playerPreferences} onPreferenceChange={handlePreferenceChange}/>) : <EmptyFeed/>}
     </section>
+    <div className={preferenceNotice ? "preference-notice visible" : "preference-notice"} role="status" aria-live="polite">{preferenceNotice}</div>
     <nav className="mobile-nav"><button className="active"><b>⌁</b><span>Pulse</span></button><button><b>○</b><span>Compete</span></button><button><b>□</b><span>Collection</span></button><button><b>◇</b><span>Shop</span></button><button><b>●</b><span>Profile</span></button></nav>
   </main>;
 }
