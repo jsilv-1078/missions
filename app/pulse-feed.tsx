@@ -13,6 +13,16 @@ function currency(value: number) {
   return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(value);
 }
 
+function compactCurrency(value: number) {
+  return new Intl.NumberFormat("en-US",{
+    style:"currency",currency:"USD",notation:"compact",maximumFractionDigits:1,
+  }).format(value);
+}
+
+function compactNumber(value: number) {
+  return new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:1}).format(value);
+}
+
 function dateLabel(value: string) {
   const date = new Date(value);
   return Number.isFinite(date.getTime())
@@ -76,7 +86,6 @@ function PlayerIndexPortrait({ story }: { story: MarketStory }) {
     {failed
       ? <div className="player-index-portrait-fallback" aria-hidden="true">{initials}</div>
       : <Image src={story.imageUrl} alt={`${story.player} portrait`} fill sizes="(max-width: 430px) 58vw, 245px" onError={() => setFailed(true)}/>}
-    <div className="player-index-portrait-label"><span>INDEX SUBJECT</span><strong>{story.player}</strong></div>
   </div>;
 }
 
@@ -98,15 +107,6 @@ function gradePremiumLabel(prices: MarketStory["gradePrices"], index: number) {
 }
 
 function MarketFrontVisual({ story }: { story: MarketStory }) {
-  if (story.storyKind === "player_index") {
-    const insight = story.insight;
-    const movement = insight?.averageSaleChange30d ?? 0;
-    return <div className="player-index-stage">
-      <div className="player-index-value"><span>30-DAY TRADED VALUE</span><strong>{currency(insight?.totalValue30d ?? 0)}</strong><div><p><b>{(insight?.totalSales30d ?? 0).toLocaleString()}</b><small>SALES</small></p><p><b>{currency(insight?.averageSale30d ?? 0)}</b><small>AVG SALE</small></p><p><b className={movement < 0 ? "down" : "up"}>{moveLabel(movement)}</b><small>VS PRIOR 30D</small></p></div></div>
-      <div className="player-index-lower"><PlayerIndexPortrait key={story.imageUrl} story={story}/><div className="player-index-score"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "PILOT"}</b><small>LIQUIDITY + MARKET EVIDENCE</small></div></div>
-    </div>;
-  }
-
   if (story.storyKind === "player_snapshot") {
     const items = story.insight?.items ?? [];
     const average = story.insight?.averageChange30d ?? 0;
@@ -148,7 +148,34 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
   return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><GradeStamp grade={story.grade}/><small>ROOKIE FMV</small><strong>{currency(story.currentValue)}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>{story.sales30d} sales · 30 days</span></div></div>;
 }
 
+function PlayerIndexFront({ story, open }: { story: MarketStory;open: () => void }) {
+  const insight = story.insight;
+  const movement = insight?.averageSaleChange30d ?? 0;
+  const direction = movement > 0 ? "UP" : movement < 0 ? "DOWN" : "FLAT";
+  return <section className="story-face market-face market-player-index player-index-front">
+    <header><PulseLogo/><span className="live-pill">{marketFreshnessLabel(story)}</span></header>
+    <div className="player-index-type"><b aria-hidden="true">PI</b><div><span>PLAYER INDEX</span><strong>30-DAY MARKET VIEW</strong></div></div>
+    <div className="player-index-hero">
+      <PlayerIndexPortrait key={story.imageUrl} story={story}/>
+      <div className="player-index-hero-shade"/>
+      <div className="player-index-score-badge"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "PILOT"}</b></div>
+      <div className="player-index-hero-copy">
+        <span>{story.sport} · PLAYER MARKET</span>
+        <h1>{story.player}</h1>
+        <div className="player-index-move"><strong className={movement < 0 ? "down" : movement > 0 ? "up" : undefined}>{moveLabel(movement)}</strong><p>AVERAGE SALE {direction}<b>VS PRIOR 30 DAYS</b></p></div>
+      </div>
+    </div>
+    <div className="player-index-activity" aria-label="30-day Player Index activity">
+      <p><span>TRADED VALUE</span><strong>{compactCurrency(insight?.totalValue30d ?? 0)}</strong></p>
+      <i/>
+      <p><span>RECORDED SALES</span><strong>{compactNumber(insight?.totalSales30d ?? 0)}</strong></p>
+    </div>
+    <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>VIEW FULL PLAYER INDEX</strong><b>→</b></button>
+  </section>;
+}
+
 function MarketFront({ story, open }: { story: MarketStory; open: () => void }) {
+  if (story.storyKind === "player_index") return <PlayerIndexFront story={story} open={open}/>;
   const format = MARKET_FORMATS[story.storyKind];
   const styleClass = kindClass(story.storyKind);
   const showCardTitle = !["player_index","player_snapshot","market_matchup"].includes(story.storyKind);
