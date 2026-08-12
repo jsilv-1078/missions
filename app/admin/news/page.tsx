@@ -148,10 +148,11 @@ export default function NewsAdmin() {
     const timer = window.setInterval(() => void poll(),1200);
     try {
       const response = await fetch("/api/admin/sync",{method:"POST",headers:{"Authorization":"Bearer " + token}});
-      const result = await response.json().catch(() => ({})) as { message?:string;written?:number;error?:string };
-      setSyncStatus(response.ok
+      const result = await response.json().catch(() => ({})) as { status?:string;message?:string;written?:number;error?:string };
+      const completed = response.ok && result.status === "success";
+      setSyncStatus(completed
         ? {kind:"success",message:result.message ?? "Market sync complete: " + (result.written ?? 0) + " stories written."}
-        : {kind:"error",message:result.error ?? "Market sync failed"});
+        : {kind:"error",message:result.error ?? result.message ?? "Market sync failed"});
     } catch {
       setSyncStatus({kind:"error",message:"The sync request stopped before completion. Check the latest stage below and try again."});
     } finally {
