@@ -76,7 +76,8 @@ const ENRICH_CONCURRENCY = 8;
 const PLAYER_INDEX_CANDIDATE_LIMIT = 36;
 const PLAYER_INDEX_FINALIST_LIMIT = 16;
 const PLAYER_INDEX_SEARCH_CONCURRENCY = 4;
-const PLAYER_INDEX_STATS_BATCH_SIZE = 25;
+const PLAYER_INDEX_STATS_BATCH_SIZE = 2;
+const PLAYER_INDEX_STATS_CONCURRENCY = 4;
 const MIN_30_DAY_SALES = 5;
 const MIN_VINTAGE_30_DAY_SALES = 3;
 const MAX_ABS_CHANGE_7D = 200;
@@ -279,16 +280,18 @@ export async function syncPlayerIndexes() {
         publishedPlayers:[] as string[],errors:["No verified player candidates were available after market sync"],rejections,
       };
     }
-    const statsPayloads = await Promise.all(
-      Array.from({ length:Math.ceil(candidates.length / PLAYER_INDEX_STATS_BATCH_SIZE) },(_,batchIndex) => {
-        const batch = candidates.slice(
-          batchIndex * PLAYER_INDEX_STATS_BATCH_SIZE,
-          (batchIndex + 1) * PLAYER_INDEX_STATS_BATCH_SIZE,
-        );
-        return cardHedgeFetch<PlayerSalesStatsResponse>("/v1/cards/sales-stats-by-player",{
+    const statsBatches = Array.from(
+      { length:Math.ceil(candidates.length / PLAYER_INDEX_STATS_BATCH_SIZE) },
+      (_,batchIndex) => candidates.slice(
+        batchIndex * PLAYER_INDEX_STATS_BATCH_SIZE,
+        (batchIndex + 1) * PLAYER_INDEX_STATS_BATCH_SIZE,
+      ),
+    );
+    const statsPayloads = await mapWithConcurrency(
+      statsBatches,PLAYER_INDEX_STATS_CONCURRENCY,(batch) =>
+        cardHedgeFetch<PlayerSalesStatsResponse>("/v1/cards/sales-stats-by-player",{
           players:batch.map((candidate) => candidate.player),interval:"day",periods:60,include_current:false,
-        });
-      }),
+        }),
     );
     const statsByPlayer = new Map(statsPayloads.flatMap((payload) => payload.results ?? [])
       .map((result) => [normalized(result.player),result]));
