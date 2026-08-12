@@ -10,9 +10,24 @@ export async function GET(request: NextRequest) {
   if (request.headers.get("authorization") !== "Bearer " + secret) {
     return NextResponse.json({error:"Unauthorized"},{status:401});
   }
+  const startedAt = Date.now();
+  const requestId = request.headers.get("x-vercel-id") ?? crypto.randomUUID();
+  console.info(JSON.stringify({
+    level:"info",message:"Automatic daily market sync started",requestId,route:"/api/cron/market-sync",
+  }));
   try {
-    return NextResponse.json(await syncMarketData());
+    const result = await syncMarketData();
+    console.info(JSON.stringify({
+      level:"info",message:"Automatic daily market sync completed",requestId,route:"/api/cron/market-sync",
+      durationMs:Date.now() - startedAt,status:result.status,seen:result.seen,written:result.written,
+    }));
+    return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({error:error instanceof Error ? error.message : "Market sync failed"},{status:502});
+    const message = error instanceof Error ? error.message : "Market sync failed";
+    console.error(JSON.stringify({
+      level:"error",message:"Automatic daily market sync failed",requestId,route:"/api/cron/market-sync",
+      durationMs:Date.now() - startedAt,error:message,
+    }));
+    return NextResponse.json({error:message},{status:502});
   }
 }

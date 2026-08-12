@@ -176,10 +176,14 @@ export function buildAutomatedMarketStories(markets: MarketStory[]) {
   if (!verified.length) return [];
   const matchups = marketMatchups(verified);
   const matchupCardIds = new Set(matchups.flatMap((story) => story.insight?.items?.map((market) => market.id) ?? []));
-  const standalone = verified.filter((story) => !matchupCardIds.has(story.cardId));
+  const afterMatchups = verified.filter((story) => !matchupCardIds.has(story.cardId));
+  const snapshots = playerSnapshots(afterMatchups);
+  const snapshotCardIds = new Set(snapshots.flatMap((story) => story.insight?.items?.map((market) => market.id) ?? []));
+  const afterSnapshots = afterMatchups.filter((story) => !snapshotCardIds.has(story.cardId));
+  const signals = priceVolumeSignals(afterSnapshots);
   return [
-    ...playerSnapshots(standalone),
-    ...priceVolumeSignals(standalone),
+    ...snapshots,
+    ...signals,
     ...matchups,
   ];
 }

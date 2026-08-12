@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
-import { remixFeedStories } from "@/lib/feed-order";
+import { useEffect, useRef, useState } from "react";
+import { RECENT_CARD_COOLDOWN_MS, remixFeedStories, storyCardKeys } from "@/lib/feed-order";
 import type { FeedStory, MarketInsightItem, MarketStory, MarketStoryKind, NewsStory } from "@/lib/types";
 
 function PulseLogo() {
@@ -20,6 +20,27 @@ function dateLabel(value: string) {
     : "Date unavailable";
 }
 
+function marketFreshnessLabel(story: MarketStory) {
+  if (story.freshnessDays <= 0) return "UPDATED TODAY";
+  if (story.freshnessDays === 1) return "UPDATED 1D AGO";
+  return `UPDATED ${story.freshnessDays}D AGO`;
+}
+
+function newsTypeLabel(story: NewsStory) {
+  const category = story.category.trim().toLocaleLowerCase();
+  if (category.includes("player")) return "PLAYER NEWS";
+  if (category.includes("hobby")) return "HOBBY NEWS";
+  if (category.includes("industry")) return "INDUSTRY NEWS";
+  if (category.includes("sale")) return "CARD SALE";
+  if (category.includes("card")) return "CARD NEWS";
+  return "NEWS";
+}
+
+function signedDifference(value: number, suffix = "%") {
+  if (!Number.isFinite(value)) return "N/A";
+  return `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}${suffix}`;
+}
+
 const MARKET_FORMATS:Record<MarketStoryKind,{ label:string;icon:string;cue:string }> = {
   high_sales_30d:{ label:"HIGH 30-DAY SALES",icon:"30",cue:"VOLUME, SALES & CONFIDENCE" },
   biggest_gain:{ label:"CARD GAINING VALUE",icon:"↑",cue:"PRICE MOVE & SALES" },
@@ -32,7 +53,6 @@ const MARKET_FORMATS:Record<MarketStoryKind,{ label:string;icon:string;cue:strin
   player_snapshot:{ label:"PLAYER MARKET",icon:"P",cue:"CARDS, SALES & DIRECTION" },
   price_volume:{ label:"PRICE + VOLUME",icon:"↕",cue:"SIGNAL, LIQUIDITY & COMPS" },
   market_matchup:{ label:"MARKET MATCHUP",icon:"VS",cue:"COMPARE BOTH MARKETS" },
-  daily_market_brief:{ label:"DAILY MARKET BRIEF",icon:"D",cue:"BREADTH, LEADERS & VOLUME" },
 };
 
 function kindClass(kind: MarketStoryKind) {
@@ -60,23 +80,11 @@ function gradePremiumLabel(prices: MarketStory["gradePrices"], index: number) {
   const next = prices[index + 1];
   if (!current || !next || next.price <= 0) return null;
   const premium = Math.round((current.price / next.price - 1) * 100);
-  return "+" + premium.toLocaleString() + "% vs " + next.grade;
+  const dollars = current.price - next.price;
+  return "+" + currency(dollars) + " · +" + premium.toLocaleString() + "% vs " + next.grade;
 }
 
 function MarketFrontVisual({ story }: { story: MarketStory }) {
-  if (story.storyKind === "daily_market_brief") {
-    const tracked = story.insight?.cardsTracked ?? 0;
-    const rising = story.insight?.risingCount ?? 0;
-    const falling = story.insight?.fallingCount ?? 0;
-    const flat = story.insight?.flatCount ?? 0;
-    const breadth = tracked ? Math.round((rising / tracked) * 100) : 0;
-    return <div className="brief-stage">
-      <div className="brief-score"><span>MARKET BREADTH</span><strong>{breadth}%</strong><b>OF TRACKED CARDS RISING</b></div>
-      <div className="brief-counts"><div className="up"><strong>{rising}</strong><span>RISING</span></div><div className="down"><strong>{falling}</strong><span>FALLING</span></div><div><strong>{flat}</strong><span>FLAT</span></div></div>
-      <p><b>{story.insight?.totalSales30d?.toLocaleString() ?? 0}</b> recorded sales across <b>{tracked}</b> verified markets</p>
-    </div>;
-  }
-
   if (story.storyKind === "player_snapshot") {
     const items = story.insight?.items ?? [];
     const average = story.insight?.averageChange30d ?? 0;
@@ -121,9 +129,9 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
 function MarketFront({ story, open }: { story: MarketStory; open: () => void }) {
   const format = MARKET_FORMATS[story.storyKind];
   const styleClass = kindClass(story.storyKind);
-  const showCardTitle = !["player_snapshot","market_matchup","daily_market_brief"].includes(story.storyKind);
+  const showCardTitle = !["player_snapshot","market_matchup"].includes(story.storyKind);
   return <section className={"story-face market-face " + styleClass}>
-    <header><PulseLogo/><span className="live-pill">LIVE DATA</span></header>
+    <header><PulseLogo/><span className="live-pill">{marketFreshnessLabel(story)}</span></header>
     <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
     <h1>{story.headline}</h1>
     <MarketFrontVisual story={story}/>
@@ -135,7 +143,7 @@ function MarketFront({ story, open }: { story: MarketStory; open: () => void }) 
 function NewsFront({ story, open }: { story: NewsStory; open: () => void }) {
   return <section className="story-face news-face">
     <header><PulseLogo/><span className="live-pill">CURATED</span></header>
-    <div className="type-banner news-banner"><b>N</b><div><span>PLAYER NEWS</span><strong>{story.category}</strong></div></div>
+    <div className="type-banner news-banner"><b>N</b><div><span>{newsTypeLabel(story)}</span><strong>{story.category}</strong></div></div>
     <h1>{story.headline}</h1>
     <div className="news-hero">
       <Image src={story.imageUrl} alt={story.player} fill sizes="(max-width: 799px) 100vw, 45vw"/>
@@ -155,28 +163,75 @@ function SalesContextGrid({ story, surge = false }: { story: MarketStory; surge?
   return <div className="metric-grid"><div><span>7D SALES</span><strong>{story.sales7d}</strong></div><div><span>{surge ? "PRIOR 23D" : "30D SALES"}</span><strong>{surge ? story.previous23DaySales : story.sales30d}</strong></div><div><span>{surge ? "30D TOTAL" : "7D CHANGE"}</span><strong>{surge ? story.sales30d : (story.change7d > 0 ? "+" : "") + story.change7d.toFixed(1) + "%"}</strong></div><div><span>CURRENT FMV</span><strong>{currency(story.currentValue)}</strong></div></div>;
 }
 
-type SnapshotItem = { label:string; value:string; tone?:"up"|"down" };
-
 function priorValue(story: MarketStory) {
   const multiplier = 1 + story.change30d / 100;
   return multiplier > 0 ? story.currentValue / multiplier : 0;
 }
 
-function MarketSnapshot({ items, story }: { items:SnapshotItem[]; story:MarketStory }) {
-  const sales = [...story.comps]
-    .filter((comp) => Number.isFinite(comp.price) && comp.price > 0)
-    .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0,3);
-  return <section className="market-snapshot" aria-label="Market snapshot">
-    <header><span>MARKET SNAPSHOT</span><b>VERIFIED DATA</b></header>
-    <div className="snapshot-metrics">{items.map((item) => <article key={item.label}><span>{item.label}</span><strong className={item.tone}>{item.value}</strong></article>)}</div>
-    <div className="snapshot-sales"><h2>LAST {sales.length || 3} VERIFIED SALES</h2>{sales.length ? sales.map((sale,index) => <article key={sale.date + index}><span><b>{dateLabel(sale.date)}</b><small>{sale.venue ?? "Recorded sale"}</small></span><strong>{currency(sale.price)}</strong></article>) : <p>No recent verified sales available.</p>}</div>
-  </section>;
+function preciseCurrency(value: number) {
+  return new Intl.NumberFormat("en-US",{
+    style:"currency",currency:"USD",minimumFractionDigits:value < 100 ? 2 : 0,maximumFractionDigits:value < 100 ? 2 : 0,
+  }).format(value);
 }
 
-function ComparableSales({ story }: { story: MarketStory }) {
-  if (!story.comps.length) return null;
-  return <div className="comps"><h2>Verified comparable sales</h2>{story.comps.map((comp,index) => <div key={comp.date + index}><span>{dateLabel(comp.date)}</span><small>{comp.venue ?? "Sale"}</small><strong>{currency(comp.price)}</strong></div>)}</div>;
+function median(values: number[]) {
+  const ordered = [...values].sort((first,second) => first - second);
+  const middle = Math.floor(ordered.length / 2);
+  if (!ordered.length) return 0;
+  return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+}
+
+type StoredMarketSnapshot = { currentValue:number;sales30d:number;updatedAt:string;viewedAt:number };
+
+function visitChangeLabel(story: MarketStory, previous?: StoredMarketSnapshot) {
+  if (!previous || previous.updatedAt === story.updatedAt) return null;
+  const valueChange = story.currentValue - previous.currentValue;
+  const percentChange = previous.currentValue > 0 ? valueChange / previous.currentValue * 100 : 0;
+  const volumeChange = story.sales30d - previous.sales30d;
+  if (Math.abs(valueChange) < 0.005 && volumeChange === 0) return null;
+  const pieces:string[] = [];
+  if (Math.abs(valueChange) >= 0.005) pieces.push(`FMV ${valueChange < 0 ? "−" : "+"}${preciseCurrency(Math.abs(valueChange))} (${signedDifference(percentChange)})`);
+  if (volumeChange !== 0) pieces.push(`30-day volume ${volumeChange > 0 ? "+" : "−"}${Math.abs(volumeChange).toLocaleString()}`);
+  return pieces.join(" · ");
+}
+
+function CollectorEvidence({ story,previous }: { story: MarketStory;previous?: StoredMarketSnapshot }) {
+  const sales = [...story.comps]
+    .filter((comp) => Number.isFinite(comp.price) && comp.price > 0)
+    .sort((first,second) => new Date(second.date).getTime() - new Date(first.date).getTime())
+    .slice(0,3);
+  const prices = sales.map((sale) => sale.price);
+  const latest = sales[0];
+  const recentMedian = median(prices);
+  const minimum = prices.length ? Math.min(...prices) : 0;
+  const maximum = prices.length ? Math.max(...prices) : 0;
+  const spread = recentMedian > 0 ? (maximum - minimum) / recentMedian * 100 : 0;
+  const stability = spread <= 10 ? "TIGHT" : spread <= 25 ? "MODERATE" : "WIDE";
+  const latestVsFmv = latest && story.currentValue > 0 ? (latest.price / story.currentValue - 1) * 100 : Number.NaN;
+  const dailySales = story.sales30d / 30;
+  const liquidity = dailySales >= 1
+    ? `${dailySales.toFixed(dailySales >= 10 ? 0 : 1)}/DAY`
+    : story.sales30d > 0 ? `1 / ${(30 / story.sales30d).toFixed(1)} DAYS` : "NO SALES";
+  const paceChange = story.salesPaceMultiple > 0 ? (story.salesPaceMultiple - 1) * 100 : Number.NaN;
+  const reversal = Math.abs(story.change7d) >= 1
+    && Math.abs(story.change30d) >= 1
+    && Math.sign(story.change7d) !== Math.sign(story.change30d);
+  const confidence = story.confidenceGrade === "A" ? "HIGH EVIDENCE" : story.confidenceGrade === "B" ? "GOOD EVIDENCE" : "LIMITED EVIDENCE";
+  const sinceVisit = visitChangeLabel(story,previous);
+
+  return <section className="collector-evidence" aria-label="Collector market evidence">
+    <header><div><span>COLLECTOR SIGNALS</span><strong>{confidence}</strong></div><b>{story.comps.length} COMPS · {marketFreshnessLabel(story)}</b></header>
+    {sinceVisit ? <p className="since-visit"><b>CHANGED SINCE YOUR LAST VIEW</b><span>{sinceVisit}</span></p> : null}
+    <div className="evidence-grid">
+      <article><span>LATEST VS FMV</span><strong className={latestVsFmv < 0 ? "down" : latestVsFmv > 0 ? "up" : undefined}>{signedDifference(latestVsFmv)}</strong><small>{latest ? `${preciseCurrency(latest.price)} sale · ${preciseCurrency(story.currentValue)} FMV` : "No recent sale"}</small></article>
+      <article><span>RECENT RANGE</span><strong>{prices.length ? `${preciseCurrency(minimum)}–${preciseCurrency(maximum)}` : "N/A"}</strong><small>{prices.length ? `${stability} SPREAD · ${spread.toFixed(1)}%` : "Not enough comps"}</small></article>
+      <article><span>LIQUIDITY</span><strong>{liquidity}</strong><small>{story.sales30d.toLocaleString()} sales · 30 days</small></article>
+      <article><span>SALES PACE</span><strong className={paceChange < 0 ? "down" : paceChange > 0 ? "up" : undefined}>{signedDifference(paceChange)}</strong><small>vs preceding 23 days</small></article>
+    </div>
+    {reversal ? <p className="momentum-reversal"><b>MOMENTUM REVERSAL</b><span>{signedDifference(story.change7d)} over 7 days vs {signedDifference(story.change30d)} over 30 days</span></p> : null}
+    <div className="evidence-sales"><h2>LAST {sales.length || 3} VERIFIED SALES</h2>{sales.length ? sales.map((sale,index) => <article key={sale.date + index}><span><b>{dateLabel(sale.date)}</b><small>{sale.venue ?? "Recorded sale"}</small></span><strong>{preciseCurrency(sale.price)}</strong></article>) : <p>No recent verified sales available.</p>}</div>
+    <footer>Signals describe verified pricing activity and are not a recommendation to buy, sell or grade.</footer>
+  </section>;
 }
 
 function InsightMarketRows({ label, items }: { label:string; items:MarketInsightItem[] }) {
@@ -188,28 +243,17 @@ function InsightMarketRows({ label, items }: { label:string; items:MarketInsight
 
 function MarketDetailLead({ story }: { story: MarketStory }) {
   const negative = story.change30d < 0;
-  if (story.storyKind === "daily_market_brief") {
-    const tracked = story.insight?.cardsTracked ?? 0;
-    const rising = story.insight?.risingCount ?? 0;
-    const falling = story.insight?.fallingCount ?? 0;
-    const flat = story.insight?.flatCount ?? 0;
-    const breadth = tracked ? Math.round((rising / tracked) * 100) : 0;
-    return <><div className="brief-detail"><span>DAILY MARKET BREADTH</span><strong>{breadth}%</strong><b>{rising} OF {tracked} TRACKED CARDS RISING</b><div><p className="up"><b>{rising}</b><small>RISING</small></p><p className="down"><b>{falling}</b><small>FALLING</small></p><p><b>{flat}</b><small>FLAT</small></p></div><em>{story.insight?.totalSales30d?.toLocaleString() ?? 0} TOTAL 30-DAY SALES</em></div><InsightMarketRows label="TODAY'S MARKET LEADERS" items={story.insight?.items ?? []}/></>;
-  }
   if (story.storyKind === "player_snapshot") {
     const average = story.insight?.averageChange30d ?? 0;
     return <><div className="player-detail-summary"><span>PLAYER MARKET SNAPSHOT</span><strong className={average < 0 ? "down" : "up"}>{moveLabel(average)}</strong><b>WEIGHTED 30-DAY DIRECTION</b><div><p><small>TRACKED CARDS</small><b>{story.insight?.cardsTracked ?? 0}</b></p><p><small>RECORDED SALES</small><b>{story.insight?.totalSales30d?.toLocaleString() ?? 0}</b></p></div></div><InsightMarketRows label="CARDS IN THIS SNAPSHOT" items={story.insight?.items ?? []}/></>;
   }
-  if (story.storyKind === "price_volume") return <><div className="signal-detail"><span>PRICE + VOLUME SIGNAL</span><b>{story.insight?.label ?? "MARKET SIGNAL"}</b><strong className={negative ? "down" : "up"}>{moveLabel(story.change30d)}</strong><div><p><small>30-DAY SALES</small><b>{story.sales30d.toLocaleString()}</b></p><p><small>VOLUME RANK</small><b>{story.insight?.volumePercentile ?? 0}TH %ILE</b></p></div></div><MarketSnapshot items={[
-    {label:"CURRENT FMV",value:currency(story.currentValue)},
-    {label:"30 DAYS AGO",value:currency(priorValue(story))},
-  ]} story={story}/></>;
+  if (story.storyKind === "price_volume") return <div className="signal-detail"><span>PRICE + VOLUME SIGNAL</span><b>{story.insight?.label ?? "MARKET SIGNAL"}</b><strong className={negative ? "down" : "up"}>{moveLabel(story.change30d)}</strong><div><p><small>30-DAY SALES</small><b>{story.sales30d.toLocaleString()}</b></p><p><small>VOLUME RANK</small><b>{story.insight?.volumePercentile ?? 0}TH %ILE</b></p></div></div>;
   if (story.storyKind === "market_matchup") return <><div className="matchup-detail"><span>HEAD-TO-HEAD MARKET</span>{(story.insight?.items ?? []).slice(0,2).map((market,index) => <article key={market.id}><InsightImage insight={market}/><div><small>{index === 0 ? "MARKET A" : "MARKET B"}</small><strong>{market.player}</strong><span>{market.cardTitle}</span><p><b>{market.grade}</b><b>{currency(market.currentValue)}</b><b className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</b><b>{market.sales30d} sales</b></p></div>{index === 0 ? <i>VS</i> : null}</article>)}</div></>;
   if (story.storyKind === "high_sales_30d") {
     const recentShare = story.sales30d ? Math.round((story.sales7d / story.sales30d) * 100) : 0;
     return <><div className="volume-detail"><span>30-DAY SALES</span><strong>{story.sales30d.toLocaleString()}</strong><b>{story.sales7d} in the last 7 days</b><small>{recentShare}% of monthly sales occurred this week</small></div><MetricGrid story={story}/></>;
   }
-  if (story.storyKind === "recent_sale") return <><div className="receipt-detail"><span>CONFIRMED SALE · {story.grade}</span><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><div><b>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</b><small>{story.recentSale?.venue ?? "Recorded comp"}</small></div><p>Current FMV <b>{currency(story.currentValue)}</b></p></div><ComparableSales story={story}/></>;
+  if (story.storyKind === "recent_sale") return <div className="receipt-detail"><span>CONFIRMED SALE · {story.grade}</span><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><div><b>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</b><small>{story.recentSale?.venue ?? "Recorded comp"}</small></div><p>Current FMV <b>{currency(story.currentValue)}</b></p></div>;
   if (story.storyKind === "grade_gap") return <><div className="gap-detail"><span>GRADING PRICE LADDER</span><strong>{story.gradeGapMultiple.toFixed(1)}×</strong><small>{story.gradePrices[0]?.grade} TO {story.gradePrices[story.gradePrices.length - 1]?.grade} PREMIUM</small>{story.gradePrices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span><b>{item.grade}</b>{gradePremiumLabel(story.gradePrices,index) ? <small>{gradePremiumLabel(story.gradePrices,index)}</small> : null}</span><strong>{currency(item.price)}</strong></div>)}</div><div className="detail-price compact"><span>CURRENT FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong></div></>;
   if (story.storyKind === "sales_surge") {
     const recentDaily = story.sales7d / 7;
@@ -217,36 +261,25 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
     return <><div className="surge-detail"><span>SALES VELOCITY</span><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><small>FASTER DAILY PACE</small><div><p><b>{priorDaily.toFixed(1)}</b><span>DAILY · PRIOR 23D</span></p><i>→</i><p><b>{recentDaily.toFixed(1)}</b><span>DAILY · LAST 7D</span></p></div></div><SalesContextGrid story={story} surge/></>;
   }
   if (story.storyKind === "rookie_watch") {
-    return <><div className="rookie-detail"><b>RC</b><div><span>ROOKIE CARD FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong><small>{story.sales30d} recorded sales in 30 days</small></div></div><MarketSnapshot items={[
-      {label:"30-DAY MOVE",value:(negative ? "−" : "+") + Math.abs(story.change30d).toFixed(1) + "%",tone:negative ? "down" : "up"},
-      {label:"30 DAYS AGO",value:currency(priorValue(story))},
-    ]} story={story}/></>;
+    return <div className="rookie-detail"><b>RC</b><div><span>ROOKIE CARD FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong><small>{story.sales30d} recorded sales in 30 days</small></div></div>;
   }
   if (story.storyKind === "vintage_mover") {
-    return <><div className="vintage-detail"><span>VINTAGE MARKET</span><strong>{story.cardYear || "VINTAGE"}</strong><div><p><small>CARD GRADE</small><b>{story.grade}</b></p><p><small>CURRENT FMV</small><b>{currency(story.currentValue)}</b></p></div><em className={negative ? "down" : "up"}>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}% OVER 30 DAYS</em></div><MarketSnapshot items={[
-      {label:"30-DAY SALES",value:story.sales30d.toLocaleString()},
-      {label:"LAST 7D SALES",value:story.sales7d.toLocaleString()},
-    ]} story={story}/></>;
+    return <div className="vintage-detail"><span>VINTAGE MARKET</span><strong>{story.cardYear || "VINTAGE"}</strong><div><p><small>CARD GRADE</small><b>{story.grade}</b></p><p><small>CURRENT FMV</small><b>{currency(story.currentValue)}</b></p></div><em className={negative ? "down" : "up"}>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}% OVER 30 DAYS</em></div>;
   }
   const oldValue = priorValue(story);
   const dollarMove = story.currentValue - oldValue;
-  return <><div className="detail-price"><span>30-DAY CARD VALUE {story.storyKind === "biggest_loss" ? "DECLINE" : "INCREASE"} · {story.grade}</span><strong>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{currency(story.currentValue)} FMV</b></div><MarketSnapshot items={[
-    {label:"30 DAYS AGO",value:currency(oldValue)},
-    {label:"DOLLAR MOVE",value:(dollarMove < 0 ? "−" : "+") + currency(Math.abs(dollarMove)),tone:dollarMove < 0 ? "down" : "up"},
-  ]} story={story}/></>;
+  return <div className="detail-price"><span>30-DAY CARD VALUE {story.storyKind === "biggest_loss" ? "DECLINE" : "INCREASE"} · {story.grade}</span><strong>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{currency(story.currentValue)} FMV · {(dollarMove < 0 ? "−" : "+") + currency(Math.abs(dollarMove))}</b></div>;
 }
 
-function MarketDetail({ story, close }: { story: MarketStory; close: () => void }) {
+function MarketDetail({ story, close,previous }: { story: MarketStory; close: () => void;previous?: StoredMarketSnapshot }) {
   const format = MARKET_FORMATS[story.storyKind];
-  const automated = ["player_snapshot","price_volume","market_matchup","daily_market_brief"].includes(story.storyKind);
-  const hideExtraComps = ["recent_sale","rookie_watch","vintage_mover","biggest_gain","biggest_loss","player_snapshot","price_volume","market_matchup","daily_market_brief"].includes(story.storyKind);
+  const combinedMarket = ["player_snapshot","market_matchup"].includes(story.storyKind);
   return <section className={"detail-face market-detail " + kindClass(story.storyKind)}>
     <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{format.label}</span><strong>{story.player}</strong></div><b>{format.icon}</b></header>
     <div className="detail-scroll">
       <MarketDetailLead story={story}/>
-      {!automated ? <div className="confidence"><div><span>DATA CONFIDENCE</span><strong>GRADE {story.confidenceGrade}</strong></div><p>Updated {story.freshnessDays} day{story.freshnessDays === 1 ? "" : "s"} ago</p></div> : null}
-      {!hideExtraComps ? <ComparableSales story={story}/> : null}
-      <div className="why"><span>WHY IT MATTERS</span><p>{story.summary}</p></div>
+      {!combinedMarket ? <CollectorEvidence story={story} previous={previous}/> : null}
+      <div className="why"><span>COLLECTOR TAKEAWAY</span><p>{story.summary}</p></div>
     </div>
     <button className="return-cue" onClick={close}>← SWIPE LEFT TO RETURN</button>
   </section>;
@@ -254,20 +287,19 @@ function MarketDetail({ story, close }: { story: MarketStory; close: () => void 
 
 function NewsDetail({ story, close }: { story: NewsStory; close: () => void }) {
   return <section className="detail-face news-detail">
-    <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>PLAYER NEWS</span><strong>{story.player}</strong></div><b>N</b></header>
+    <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{newsTypeLabel(story)}</span><strong>{story.player}</strong></div><b>N</b></header>
     <div className="detail-scroll">
       <div className="article-meta"><span>{story.category}</span><b>{story.source}</b><small>{dateLabel(story.publishedAt)}</small></div>
       <h2 className="article-headline">{story.headline}</h2>
       <div className="article-image"><Image src={story.imageUrl} alt={story.player} fill sizes="(max-width: 799px) 92vw, 55vw"/></div>
       <p className="article-summary">{story.summary}</p>
-      <div className="why"><span>WHY COLLECTORS CARE</span><p>Player news can change attention, sales volume and demand for related cards. Market context will be connected automatically when a matching player or card is available.</p></div>
       <a className="article-link" href={story.articleUrl} target="_blank" rel="noreferrer">READ THE ORIGINAL ARTICLE <b>↗</b></a>
     </div>
     <button className="return-cue" onClick={close}>← SWIPE LEFT TO RETURN</button>
   </section>;
 }
 
-function Story({ story }: { story: FeedStory }) {
+function Story({ story,previous }: { story: FeedStory;previous?: StoredMarketSnapshot }) {
   const [open,setOpen] = useState(false);
   const start = useRef<{x:number;y:number}|null>(null);
   const touchStart = (event: React.TouchEvent) => {
@@ -285,7 +317,7 @@ function Story({ story }: { story: FeedStory }) {
   return <article className={"pulse-story " + story.type + (open ? " open" : "")} onTouchStart={touchStart} onTouchEnd={touchEnd}>
     <div className="story-track">
       {story.type === "market" ? <MarketFront story={story} open={() => setOpen(true)}/> : <NewsFront story={story} open={() => setOpen(true)}/>}
-      {story.type === "market" ? <MarketDetail story={story} close={() => setOpen(false)}/> : <NewsDetail story={story} close={() => setOpen(false)}/>}
+      {story.type === "market" ? <MarketDetail story={story} close={() => setOpen(false)} previous={previous}/> : <NewsDetail story={story} close={() => setOpen(false)}/>}
     </div>
   </article>;
 }
@@ -316,22 +348,88 @@ function WelcomeScreen({ start }: { start: () => void }) {
   </section>;
 }
 
+const RECENT_CARD_STORAGE_KEY = "cm_pulse_recent_cards_v1";
+const MARKET_SNAPSHOT_STORAGE_KEY = "cm_pulse_market_snapshots_v1";
+const MARKET_SNAPSHOT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function PulseFeed({ initialStories,showIntroInitially = false }: { initialStories: FeedStory[]; showIntroInitially?: boolean }) {
   const cycleRef = useRef(0);
   const appendingRef = useRef(false);
   const sourceStories = useRef(initialStories);
+  const recentCardTimestamps = useRef<Record<string,number>>({});
+  const storedMarketSnapshots = useRef<Record<string,StoredMarketSnapshot>>({});
+  const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastViewedStoryId = useRef<string | null>(null);
   const [showIntro,setShowIntro] = useState(showIntroInitially);
+  const [previousMarketSnapshots,setPreviousMarketSnapshots] = useState<Record<string,StoredMarketSnapshot>>({});
   const [entries,setEntries] = useState(() => initialStories.map((story,index) => ({
     instanceId:`0-${index}-${story.id}`,
     story,
   })));
 
+  useEffect(() => {
+    if (showIntro) return;
+    const now = Date.now();
+    try {
+      const stored = JSON.parse(localStorage.getItem(RECENT_CARD_STORAGE_KEY) ?? "{}") as Record<string,number>;
+      recentCardTimestamps.current = Object.fromEntries(Object.entries(stored).filter(([,viewedAt]) =>
+        Number.isFinite(viewedAt) && now - viewedAt < RECENT_CARD_COOLDOWN_MS,
+      ));
+    } catch {
+      recentCardTimestamps.current = {};
+    }
+    try {
+      const stored = JSON.parse(localStorage.getItem(MARKET_SNAPSHOT_STORAGE_KEY) ?? "{}") as Record<string,StoredMarketSnapshot>;
+      storedMarketSnapshots.current = Object.fromEntries(Object.entries(stored).filter(([,snapshot]) =>
+        snapshot && Number.isFinite(snapshot.currentValue) && Number.isFinite(snapshot.sales30d)
+          && Number.isFinite(snapshot.viewedAt) && now - snapshot.viewedAt < MARKET_SNAPSHOT_MAX_AGE_MS,
+      ));
+      setPreviousMarketSnapshots({ ...storedMarketSnapshots.current });
+    } catch {
+      storedMarketSnapshots.current = {};
+      setPreviousMarketSnapshots({});
+    }
+    const remixed = remixFeedStories(initialStories,undefined,{ recentCardTimestamps:recentCardTimestamps.current,now });
+    sourceStories.current = remixed;
+    cycleRef.current = 0;
+    setEntries(remixed.map((story,index) => ({ instanceId:`0-${index}-${story.id}`,story })));
+    if (remixed[0]) scheduleStoryViewed(remixed[0]);
+    return () => {
+      if (viewTimer.current) clearTimeout(viewTimer.current);
+    };
+  },[initialStories,showIntro]);
+
+  function markStoryViewed(story: FeedStory) {
+    if (lastViewedStoryId.current === story.id) return;
+    lastViewedStoryId.current = story.id;
+    const now = Date.now();
+    for (const key of storyCardKeys(story)) recentCardTimestamps.current[key] = now;
+    if (story.type === "market") {
+      storedMarketSnapshots.current[story.cardId] = {
+        currentValue:story.currentValue,sales30d:story.sales30d,updatedAt:story.updatedAt,viewedAt:now,
+      };
+    }
+    try {
+      localStorage.setItem(RECENT_CARD_STORAGE_KEY,JSON.stringify(recentCardTimestamps.current));
+      localStorage.setItem(MARKET_SNAPSHOT_STORAGE_KEY,JSON.stringify(storedMarketSnapshots.current));
+    } catch {
+      // Feed behavior remains intact when private browsing blocks local storage.
+    }
+  }
+
+  function scheduleStoryViewed(story: FeedStory) {
+    if (viewTimer.current) clearTimeout(viewTimer.current);
+    viewTimer.current = setTimeout(() => markStoryViewed(story),800);
+  }
+
   function appendRemixedCycle() {
     if (appendingRef.current || sourceStories.current.length === 0) return;
     appendingRef.current = true;
     setEntries((current) => {
-      const previous = current.at(-1)?.story;
-      const nextCycle = remixFeedStories(sourceStories.current,previous);
+      const recentHistory = current.slice(-20).map((entry) => entry.story);
+      const nextCycle = remixFeedStories(sourceStories.current,recentHistory,{
+        recentCardTimestamps:recentCardTimestamps.current,
+      });
       cycleRef.current += 1;
       return [...current,...nextCycle.map((story,index) => ({
         instanceId:`${cycleRef.current}-${index}-${story.id}`,
@@ -345,6 +443,8 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
 
   function handleScroll(event: React.UIEvent<HTMLElement>) {
     const feed = event.currentTarget;
+    const visibleIndex = Math.max(0,Math.min(entries.length - 1,Math.round(feed.scrollTop / feed.clientHeight)));
+    if (entries[visibleIndex]) scheduleStoryViewed(entries[visibleIndex].story);
     const remaining = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
     if (remaining < feed.clientHeight * 3) appendRemixedCycle();
   }
@@ -359,7 +459,7 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
   return <main className="app-shell">
     <nav className="desktop-nav"><PulseLogo/><div><button className="active">For You</button><button>Market</button><button>News</button></div><a href="/admin/news">News Admin</a></nav>
     <section className="feed" aria-label="Pulse market and news feed" onScroll={handleScroll}>
-      {entries.length ? entries.map(({instanceId,story}) => <Story key={instanceId} story={story}/>) : <EmptyFeed/>}
+      {entries.length ? entries.map(({instanceId,story}) => <Story key={instanceId} story={story} previous={story.type === "market" ? previousMarketSnapshots[story.cardId] : undefined}/>) : <EmptyFeed/>}
     </section>
     <nav className="mobile-nav"><button className="active"><b>⌁</b><span>Pulse</span></button><button><b>○</b><span>Compete</span></button><button><b>□</b><span>Collection</span></button><button><b>◇</b><span>Shop</span></button><button><b>●</b><span>Profile</span></button></nav>
   </main>;

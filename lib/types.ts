@@ -9,8 +9,7 @@ export type MarketStoryKind =
   | "vintage_mover"
   | "player_snapshot"
   | "price_volume"
-  | "market_matchup"
-  | "daily_market_brief";
+  | "market_matchup";
 
 export type MarketGradePrice = { grade: string; price: number };
 export type MarketSale = { date: string; price: number; venue?: string };

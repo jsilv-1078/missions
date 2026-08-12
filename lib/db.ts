@@ -229,10 +229,10 @@ export async function getFeedStories(limit = 30, offset = 0): Promise<FeedStory[
     ]);
     const marketStories = markets.map((row,index) => marketRow(row,index));
     const automatedStories = buildAutomatedMarketStories(marketStories);
-    const matchupCardIds = new Set(automatedStories.flatMap((story) =>
-      story.storyKind === "market_matchup" ? story.insight?.items?.map((item) => item.id) ?? [] : [],
+    const automatedCardIds = new Set(automatedStories.flatMap((story) =>
+      story.insight?.items?.map((item) => item.id) ?? [],
     ));
-    const standaloneStories = marketStories.filter((story) => !matchupCardIds.has(story.cardId));
+    const standaloneStories = marketStories.filter((story) => !automatedCardIds.has(story.cardId));
     return interleave([...automatedStories,...standaloneStories], news.map(newsRow)).slice(offset,offset + limit);
   } catch (error) {
     console.error("Pulse database read failed", error);
