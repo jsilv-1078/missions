@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { buildAutomatedMarketStories } from "./market-insights";
 import { marketHeadline } from "./market-headlines";
-import { PLAYER_INDEX_PILOTS } from "./player-index";
+import { PLAYER_INDEX_PILOTS, playerIndexPortraitUrl } from "./player-index";
 import type { FeedStory, MarketStory, NewArticleInput, NewsStory } from "./types";
 
 type SqlClient = NeonQueryFunction<false, false>;
@@ -248,6 +248,7 @@ function playerIndexRow(row: Record<string, unknown>):MarketStory | null {
   if (story.type !== "market" || story.storyKind !== "player_index" || !story.player || !story.insight) return null;
   return {
     ...story,
+    imageUrl:playerIndexPortraitUrl(story.player) ?? story.imageUrl,
     updatedAt:new Date(String(row.source_updated_at ?? story.updatedAt)).toISOString(),
     demo:false,
   };

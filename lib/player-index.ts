@@ -1,11 +1,15 @@
 import type { MarketInsightItem, MarketStory } from "./types";
 
 export const PLAYER_INDEX_PILOTS = [
-  { player:"Kobe Bryant",sport:"Basketball" },
-  { player:"Paul Skenes",sport:"Baseball" },
-  { player:"Willie Mays",sport:"Baseball" },
-  { player:"Tom Brady",sport:"Football" },
+  { player:"Kobe Bryant",sport:"Basketball",imageUrl:"https://cdn.nba.com/headshots/nba/latest/1040x760/977.png" },
+  { player:"Paul Skenes",sport:"Baseball",imageUrl:"https://img.mlbstatic.com/mlb-photos/image/upload/w_426,q_auto:best/v1/people/694973/headshot/67/current" },
+  { player:"Willie Mays",sport:"Baseball",imageUrl:"https://img.mlbstatic.com/mlb-photos/image/upload/w_426,q_auto:best/v1/people/118495/headshot/67/current" },
+  { player:"Tom Brady",sport:"Football",imageUrl:"https://a.espncdn.com/i/headshots/nfl/players/full/2330.png" },
 ] as const;
+
+export function playerIndexPortraitUrl(player: string) {
+  return PLAYER_INDEX_PILOTS.find((pilot) => normalized(pilot.player) === normalized(player))?.imageUrl;
+}
 
 export type PlayerSalesBucket = {
   start: string;
@@ -21,6 +25,7 @@ export type PlayerIndexCard = MarketInsightItem;
 type BuildPlayerIndexInput = {
   player: string;
   sport: string;
+  playerImageUrl: string;
   buckets: PlayerSalesBucket[];
   cards: PlayerIndexCard[];
   catalogMatches: number;
@@ -151,7 +156,7 @@ export function buildPlayerIndexStory(input: BuildPlayerIndexInput):MarketStory 
     headline:headlineFor(input.player,current.count,current.totalAmount,averageSaleChange30d),
     summary:`Across the latest 30 closed daily sales buckets, ${input.player} cards produced ${current.count.toLocaleString()} recorded sales totaling ${usd(current.totalAmount)}. Average sale price is ${signedPercent(averageSaleChange30d)} versus the prior 30 days; card mix and bulk lots can influence that comparison.`,
     cardId:id,cardTitle:`${cards.length.toLocaleString()} active card records · multi-grade player market`,
-    imageUrl:representativeCards[0].imageUrl,grade:"MULTI-GRADE",currentValue:current.totalAmount,
+    imageUrl:input.playerImageUrl,grade:"MULTI-GRADE",currentValue:current.totalAmount,
     change7d:0,change30d:averageSaleChange30d,
     sales7d:sum(currentBuckets.slice(-7).map((bucket) => bucket.count)),sales30d:current.count,
     confidenceGrade,freshnessDays,chart:[],comps:[],rookie:false,cardYear:0,gradePrices:[],gradeGapMultiple:0,

@@ -243,7 +243,7 @@ async function syncPlayerIndexes() {
         return parsed ? [parsed] : [];
       });
       const story = buildPlayerIndexStory({
-        player:pilot.player,sport:pilot.sport,buckets:playerSalesBuckets(statsResult),cards,
+        player:pilot.player,sport:pilot.sport,playerImageUrl:pilot.imageUrl,buckets:playerSalesBuckets(statsResult),cards,
         catalogMatches:Number(search.count ?? search.cards?.length ?? 0),updatedAt:new Date().toISOString(),
       });
       if (!story) {

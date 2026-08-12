@@ -68,6 +68,18 @@ function InsightImage({ insight, className = "" }: { insight: MarketInsightItem;
   return <div className={`insight-card-image ${className}`}><Image src={insight.imageUrl} alt={insight.cardTitle} fill sizes="(max-width: 430px) 40vw, 170px"/></div>;
 }
 
+function PlayerIndexPortrait({ story }: { story: MarketStory }) {
+  const [failed,setFailed] = useState(false);
+  const initials = story.player.split(/\s+/).map((part) => part[0]).join("").slice(0,2);
+  const tallPortrait = story.imageUrl.includes("mlbstatic.com");
+  return <div className="player-index-portrait" data-tall={tallPortrait ? "true" : "false"}>
+    {failed
+      ? <div className="player-index-portrait-fallback" aria-hidden="true">{initials}</div>
+      : <Image src={story.imageUrl} alt={`${story.player} portrait`} fill sizes="(max-width: 430px) 58vw, 245px" onError={() => setFailed(true)}/>}
+    <div className="player-index-portrait-label"><span>INDEX SUBJECT</span><strong>{story.player}</strong></div>
+  </div>;
+}
+
 function moveLabel(value: number) {
   return `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
 }
@@ -88,11 +100,10 @@ function gradePremiumLabel(prices: MarketStory["gradePrices"], index: number) {
 function MarketFrontVisual({ story }: { story: MarketStory }) {
   if (story.storyKind === "player_index") {
     const insight = story.insight;
-    const items = insight?.items ?? [];
     const movement = insight?.averageSaleChange30d ?? 0;
     return <div className="player-index-stage">
       <div className="player-index-value"><span>30-DAY TRADED VALUE</span><strong>{currency(insight?.totalValue30d ?? 0)}</strong><div><p><b>{(insight?.totalSales30d ?? 0).toLocaleString()}</b><small>SALES</small></p><p><b>{currency(insight?.averageSale30d ?? 0)}</b><small>AVG SALE</small></p><p><b className={movement < 0 ? "down" : "up"}>{moveLabel(movement)}</b><small>VS PRIOR 30D</small></p></div></div>
-      <div className="player-index-lower"><div className="player-index-cards">{items.slice(0,3).map((market,index) => <InsightImage insight={market} className={`index-card index-card-${index + 1}`} key={market.id}/>)}</div><div className="player-index-score"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "PILOT"}</b><small>LIQUIDITY + MARKET EVIDENCE</small></div></div>
+      <div className="player-index-lower"><PlayerIndexPortrait key={story.imageUrl} story={story}/><div className="player-index-score"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "PILOT"}</b><small>LIQUIDITY + MARKET EVIDENCE</small></div></div>
     </div>;
   }
 
