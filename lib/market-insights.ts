@@ -1,4 +1,5 @@
 import type { MarketInsightItem, MarketStory } from "./types";
+import { valueDirectionIsCurrent } from "./market-freshness";
 
 const DIRECTION_THRESHOLD = 0.05;
 const MAX_PRICE_VOLUME_STORIES = 10;
@@ -190,9 +191,10 @@ function marketMatchups(markets: MarketStory[]) {
 export function buildAutomatedMarketStories(markets: MarketStory[]) {
   const verified = markets.filter((story) => !story.demo && Number.isFinite(story.currentValue) && story.currentValue > 0);
   if (!verified.length) return [];
-  const matchups = marketMatchups(verified);
+  const currentDirectionMarkets = verified.filter((story) => valueDirectionIsCurrent(story.freshnessDays));
+  const matchups = marketMatchups(currentDirectionMarkets);
   const matchupCardIds = new Set(matchups.flatMap((story) => story.insight?.items?.map((market) => market.id) ?? []));
-  const afterMatchups = verified.filter((story) => !matchupCardIds.has(story.cardId));
+  const afterMatchups = currentDirectionMarkets.filter((story) => !matchupCardIds.has(story.cardId));
   const snapshots = playerSnapshots(afterMatchups);
   const snapshotCardIds = new Set(snapshots.flatMap((story) => story.insight?.items?.map((market) => market.id) ?? []));
   const afterSnapshots = afterMatchups.filter((story) => !snapshotCardIds.has(story.cardId));

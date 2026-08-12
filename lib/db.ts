@@ -1,5 +1,6 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { buildAutomatedMarketStories } from "./market-insights";
+import { storyRequiresCurrentValueDirection, valueDirectionIsCurrent } from "./market-freshness";
 import { marketHeadline } from "./market-headlines";
 import {
   applyPlayerIndexFeature,PLAYER_INDEX_DAILY_TARGET,playerIndexPortraitUrl,type PlayerIndexRecentFeature,
@@ -313,20 +314,22 @@ function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
   const recentSale = meta.recentSale && typeof meta.recentSale === "object"
     ? meta.recentSale as MarketStory["recentSale"]
     : undefined;
+  const freshnessDays = Number(row.freshness_days);
   const headline = marketHeadline({
     cardId:String(row.card_id), player:String(row.player), storyKind,
     change30d:Number(row.change_30d), sales30d:Number(row.sales_30d), gradePrices,
     cardYear:Number(meta.cardYear ?? 0),
     gradeGapMultiple:Number(meta.gradeGapMultiple ?? 0), salesPaceMultiple:Number(meta.salesPaceMultiple ?? 0),
-    recentSale, variant,
+    recentSale, freshnessDays, variant,
   });
   return {
     id:String(row.id), type:"market", storyKind,
-    player:String(row.player), sport:String(row.sport), headline, summary:publicMarketCopy(row.summary),
+    player:String(row.player), sport:String(row.sport), headline,
+    summary:marketSummary(row,storyKind,freshnessDays),
     cardId:String(row.card_id), cardTitle:String(row.card_title), imageUrl:String(row.image_url), grade:String(row.grade),
     currentValue:Number(row.current_value), change7d:Number(row.change_7d), change30d:Number(row.change_30d),
     sales7d:Number(row.sales_7d), sales30d:Number(row.sales_30d), confidenceGrade:String(row.confidence_grade),
-    freshnessDays:Number(row.freshness_days), chart:Array.isArray(row.chart) ? row.chart.map(Number) : [],
+    freshnessDays, chart:Array.isArray(row.chart) ? row.chart.map(Number) : [],
     comps:Array.isArray(row.comps) ? row.comps as MarketStory["comps"] : [],
     rookie:Boolean(meta.rookie), cardYear:Number(meta.cardYear ?? 0), gradePrices,
     gradeGapMultiple:Number(meta.gradeGapMultiple ?? 0), salesPaceMultiple:Number(meta.salesPaceMultiple ?? 0),
@@ -334,6 +337,35 @@ function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
     recentSale,
     updatedAt:new Date(String(row.updated_at)).toISOString(), demo:Boolean(row.demo),
   };
+}
+
+function marketSummary(row: Record<string,unknown>, storyKind: MarketStory["storyKind"], freshnessDays: number) {
+  const sales30d = Number(row.sales_30d).toLocaleString("en-US");
+  const sales7d = Number(row.sales_7d).toLocaleString("en-US");
+  const change30d = Number(row.change_30d);
+  const cardTitle = String(row.card_title);
+  const grade = String(row.grade);
+  if (!valueDirectionIsCurrent(freshnessDays)
+    && (storyRequiresCurrentValueDirection(storyKind) || storyKind === "rookie_watch")) {
+    return `${cardTitle} · ${grade}. ${sales30d} card-wide sales were recorded across all grades in 30 days. `
+      + `The ${grade} estimated value is ${freshnessDays} days old, so Pulse does not infer a current price direction.`;
+  }
+  if (storyKind === "biggest_gain" || storyKind === "biggest_loss") {
+    return `${cardTitle} · ${grade}. The card-wide value signal moved ${change30d < 0 ? "down" : "up"} ${Math.abs(change30d).toFixed(1)}% over 30 days, `
+      + `across ${sales30d} sales spanning all grades. The ${grade} estimated value is shown separately and is not used to calculate a dollar move.`;
+  }
+  if (storyKind === "vintage_mover") {
+    return `${cardTitle} · ${grade}. The card-wide value signal moved ${change30d < 0 ? "down" : "up"} ${Math.abs(change30d).toFixed(1)}% over 30 days `
+      + `across ${sales30d} sales spanning all grades.`;
+  }
+  if (storyKind === "rookie_watch") {
+    return `${cardTitle} · ${grade}. This rookie card recorded ${sales30d} card-wide sales across all grades in 30 days, including ${sales7d} in the latest seven days. `
+      + `The card-wide value signal is ${change30d < 0 ? "down" : "up"} ${Math.abs(change30d).toFixed(1)}% over 30 days; the ${grade} estimate is displayed separately.`;
+  }
+  return publicMarketCopy(row.summary)
+    .replace(/([\d,]+) recorded 30-day sales/gi,"$1 card-wide sales across all grades in 30 days")
+    .replace(/across ([\d,]+) recorded sales/gi,"across $1 card-wide sales spanning all grades")
+    .replace(/The last seven days produced ([\d,]+) sales/gi,"The last seven days produced $1 card-wide sales across all grades");
 }
 
 function publicMarketCopy(value: unknown) {

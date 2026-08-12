@@ -1,5 +1,14 @@
 import type { MarketStory } from "./types";
 
+// Kept local because this module is also loaded directly by Node's native TypeScript test runner.
+const MAX_DIRECTIONAL_VALUE_AGE_DAYS = 7;
+
+function valueDirectionIsCurrent(freshnessDays: number) {
+  return Number.isFinite(freshnessDays)
+    && freshnessDays >= 0
+    && freshnessDays <= MAX_DIRECTIONAL_VALUE_AGE_DAYS;
+}
+
 type HeadlineInput = {
   cardId:string;
   player:string;
@@ -11,6 +20,7 @@ type HeadlineInput = {
   gradeGapMultiple?:number;
   salesPaceMultiple?:number;
   recentSale?:MarketStory["recentSale"];
+  freshnessDays?:number;
   variant?:number;
 };
 
@@ -29,41 +39,44 @@ function currency(value: number) {
 
 export function marketHeadline({
   cardId,player,storyKind,change30d,sales30d,cardYear = 0,gradePrices = [],gradeGapMultiple = 0,
-  salesPaceMultiple = 0,recentSale,variant,
+  salesPaceMultiple = 0,recentSale,freshnessDays = 0,variant,
 }: HeadlineInput) {
   const change = Math.abs(change30d).toFixed(1);
   const sales = Math.max(0,Math.round(sales30d)).toLocaleString("en-US");
   const seed = cardId + ":" + storyKind;
+  const currentDirection = valueDirectionIsCurrent(freshnessDays);
+
+  const activityHeadline = () => stableChoice(seed,[
+    player + " card records " + sales + " sales across grades in 30 days",
+    sales + " card-wide sales put " + player + " in focus",
+    "Collectors record " + sales + " all-grade sales for this " + player + " card",
+    player + " card activity reaches " + sales + " sales in 30 days",
+  ],variant);
 
   if (storyKind === "high_sales_30d") {
-    if (change30d > 0.05) return stableChoice(seed,[
-      player + " rises " + change + "% amid " + sales + " monthly sales",
-      "Active trading accompanies a " + change + "% gain for " + player,
-      "Collectors trade " + player + " " + sales + " times as price climbs",
-      "High volume, higher price: " + player + " gains " + change + "%",
-      player + " moves " + change + "% higher during busy trading",
-      sales + " sales come with a " + change + "% rise for " + player,
-      "Trading stays brisk as " + player + " climbs " + change + "%",
-      player + " posts heavy volume and a " + change + "% gain",
+    if (currentDirection && change30d > 0.05) return stableChoice(seed,[
+      player + " card value rises " + change + "% amid " + sales + " monthly sales",
+      "Active trading accompanies a " + change + "% card-value gain for " + player,
+      "Collectors trade " + player + " " + sales + " times as card value climbs",
+      "High volume, higher card value: " + player + " gains " + change + "%",
+      player + " card value moves " + change + "% higher during busy trading",
+      sales + " sales come with a " + change + "% card-value rise for " + player,
+      "Trading stays brisk as " + player + " card value climbs " + change + "%",
+      player + " posts heavy volume and a " + change + "% card-value gain",
     ],variant);
 
-    if (change30d < -0.05) return stableChoice(seed,[
-      player + " falls " + change + "% amid " + sales + " monthly sales",
-      "Active trading accompanies a " + change + "% decline for " + player,
-      "Collectors trade " + player + " " + sales + " times as price slips",
-      "High volume, lower price: " + player + " drops " + change + "%",
-      player + " moves " + change + "% lower during busy trading",
-      sales + " sales come with a " + change + "% decline for " + player,
-      "Trading stays brisk as " + player + " falls " + change + "%",
-      player + " posts heavy volume but loses " + change + "%",
+    if (currentDirection && change30d < -0.05) return stableChoice(seed,[
+      player + " card value falls " + change + "% amid " + sales + " monthly sales",
+      "Active trading accompanies a " + change + "% card-value decline for " + player,
+      "Collectors trade " + player + " " + sales + " times as card value slips",
+      "High volume, lower card value: " + player + " drops " + change + "%",
+      player + " card value moves " + change + "% lower during busy trading",
+      sales + " sales come with a " + change + "% card-value decline for " + player,
+      "Trading stays brisk as " + player + " card value falls " + change + "%",
+      player + " posts heavy volume but loses " + change + "% in card value",
     ],variant);
 
-    return stableChoice(seed,[
-      player + " stays flat amid " + sales + " monthly sales",
-      "Active trading leaves " + player + " nearly unchanged",
-      sales + " sales keep " + player + " busy while price holds",
-      player + " posts heavy volume with little price movement",
-    ],variant);
+    return activityHeadline();
   }
 
   if (storyKind === "recent_sale" && recentSale) return stableChoice(seed,[
@@ -92,33 +105,39 @@ export function marketHeadline({
   ],variant);
 
   if (storyKind === "rookie_watch") {
-    if (change30d > 0.05) return stableChoice(seed,[
-      "Rookie watch: " + player + " gains " + change + "%",
-      player + " rookie climbs " + change + "% with " + sales + " sales",
-      player + " RC stays active and moves " + change + "% higher",
+    if (currentDirection && change30d > 0.05) return stableChoice(seed,[
+      "Rookie watch: " + player + " card value gains " + change + "%",
+      player + " rookie card value climbs " + change + "% with " + sales + " sales",
+      player + " RC stays active as card value moves " + change + "% higher",
       sales + " monthly sales accompany a " + change + "% rookie gain",
       "Collectors trade " + player + " as the rookie rises " + change + "%",
       player + " rookie card advances " + change + "% over 30 days",
     ],variant);
 
-    if (change30d < -0.05) return stableChoice(seed,[
-      "Rookie watch: " + player + " falls " + change + "%",
-      player + " rookie slips " + change + "% despite " + sales + " sales",
-      player + " RC stays active but moves " + change + "% lower",
+    if (currentDirection && change30d < -0.05) return stableChoice(seed,[
+      "Rookie watch: " + player + " card value falls " + change + "%",
+      player + " rookie card value slips " + change + "% despite " + sales + " sales",
+      player + " RC stays active as card value moves " + change + "% lower",
       sales + " monthly sales accompany a " + change + "% rookie decline",
       "Collectors trade " + player + " as the rookie falls " + change + "%",
       player + " rookie card retreats " + change + "% over 30 days",
     ],variant);
 
     return stableChoice(seed,[
-      "Rookie watch: " + player + " holds steady",
-      player + " rookie stays flat amid " + sales + " monthly sales",
-      player + " RC remains active with little price movement",
-      sales + " sales keep " + player + " busy while the rookie price holds",
+      "Rookie watch: " + player + " logs " + sales + " sales across grades",
+      player + " rookie card records " + sales + " all-grade sales",
+      sales + " card-wide sales put " + player + " rookie activity in focus",
+      "Collectors record " + sales + " sales for this " + player + " rookie card",
     ],variant);
   }
 
   if (storyKind === "vintage_mover") {
+    if (!currentDirection) return stableChoice(seed,[
+      cardYear + " " + player + " card records " + sales + " sales across grades",
+      "Vintage activity: " + sales + " card-wide sales for " + player,
+      player + "’s " + cardYear + " card draws " + sales + " all-grade sales",
+      "Collectors record " + sales + " sales for this vintage " + player + " card",
+    ],variant);
     const year = cardYear > 0 ? String(cardYear) : "Vintage";
     const direction = change30d < 0 ? "down" : "up";
     return stableChoice(seed,[
@@ -131,21 +150,25 @@ export function marketHeadline({
     ],variant);
   }
 
+  if (!currentDirection && (storyKind === "biggest_gain" || storyKind === "biggest_loss")) {
+    return activityHeadline();
+  }
+
   if (storyKind === "biggest_loss" || change30d < 0) return stableChoice(seed,[
     player + " card slips " + change + "% over 30 days",
-    "Thirty-day price moves lower for " + player,
+    "Thirty-day card value moves lower for " + player,
     player + " card cools with a " + change + "% decline",
-    "Current FMV falls " + change + "% for " + player,
-    player + " card trends lower this month",
-    "This " + player + " card retreats in price",
+    "Tracked card value falls " + change + "% for " + player,
+    player + " card value trends lower this month",
+    "This " + player + " card retreats in tracked value",
   ],variant);
 
   return stableChoice(seed,[
     player + " card climbs " + change + "% over 30 days",
     player + " card gains momentum with a " + change + "% rise",
-    "Thirty-day price moves higher for " + player,
-    "Current FMV rises " + change + "% for " + player,
-    player + " card trends higher this month",
-    "This " + player + " card advances in price",
+    "Thirty-day card value moves higher for " + player,
+    "Tracked card value rises " + change + "% for " + player,
+    player + " card value trends higher this month",
+    "This " + player + " card advances in tracked value",
   ],variant);
 }

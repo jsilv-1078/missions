@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { RECENT_CARD_COOLDOWN_MS, remixFeedStories, storyCardKeys } from "@/lib/feed-order";
+import { storyRequiresCurrentValueDirection, valueDirectionIsCurrent } from "@/lib/market-freshness";
 import type { FeedStory, MarketInsightItem, MarketStory, MarketStoryKind, NewsStory } from "@/lib/types";
 
 function PulseLogo() {
@@ -30,10 +31,22 @@ function dateLabel(value: string) {
     : "Date unavailable";
 }
 
+function ageLabel(days: number) {
+  if (days <= 0) return "TODAY";
+  if (days === 1) return "1D OLD";
+  return `${days}D OLD`;
+}
+
 function marketFreshnessLabel(story: MarketStory) {
-  if (story.freshnessDays <= 0) return "UPDATED TODAY";
-  if (story.freshnessDays === 1) return "UPDATED 1D AGO";
-  return `UPDATED ${story.freshnessDays}D AGO`;
+  if (story.storyKind === "player_index") return `INDEX DATA · ${ageLabel(story.freshnessDays)}`;
+  if (["player_snapshot","market_matchup"].includes(story.storyKind)) return "MULTI-CARD VIEW";
+  return `${story.grade} VALUE · ${ageLabel(story.freshnessDays)}`;
+}
+
+function marketFreshnessDescription(story: MarketStory) {
+  if (story.storyKind === "player_index") return `Player Index data is ${ageLabel(story.freshnessDays).toLocaleLowerCase()}.`;
+  if (["player_snapshot","market_matchup"].includes(story.storyKind)) return "This page combines multiple card records.";
+  return `${story.grade} estimated value is ${ageLabel(story.freshnessDays).toLocaleLowerCase()}. Sales activity is card-wide across all grades.`;
 }
 
 function newsTypeLabel(story: NewsStory) {
@@ -65,6 +78,16 @@ const MARKET_FORMATS:Record<MarketStoryKind,{ label:string;icon:string;cue:strin
   price_volume:{ label:"PRICE + VOLUME",icon:"↕",cue:"SIGNAL, LIQUIDITY & COMPS" },
   market_matchup:{ label:"MARKET MATCHUP",icon:"VS",cue:"COMPARE BOTH MARKETS" },
 };
+
+function marketFormat(story: MarketStory) {
+  const format = MARKET_FORMATS[story.storyKind];
+  if (valueDirectionIsCurrent(story.freshnessDays)) return format;
+  if (story.storyKind === "vintage_mover") return { label:"VINTAGE ACTIVITY",icon:"V",cue:"SALES, GRADE & VALUE" };
+  if (story.storyKind === "biggest_gain" || story.storyKind === "biggest_loss") {
+    return { label:"CARD ACTIVITY",icon:"30",cue:"SALES, GRADE & VALUE" };
+  }
+  return format;
+}
 
 function kindClass(kind: MarketStoryKind) {
   return "market-" + kind.replaceAll("_","-");
@@ -142,27 +165,32 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
     return <div className="matchup-stage">{items.slice(0,2).map((market,index) => <div className="matchup-side" key={market.id}><InsightImage insight={market}/><span>{market.player}</span><strong>{currency(market.currentValue)}</strong><b className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</b>{index === 0 ? <i>VS</i> : null}</div>)}</div>;
   }
 
+  if (storyRequiresCurrentValueDirection(story.storyKind) && !valueDirectionIsCurrent(story.freshnessDays)) return <div className="market-stage volume-stage">
+    <CardImage story={story}/><div className="volume-tally"><GradeStamp grade={story.grade}/><small>CARD-WIDE SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>ALL GRADES · 30 DAYS</b><span>{story.sales7d.toLocaleString()} card-wide sales in the last 7 days</span></div>
+  </div>;
+
   if (story.storyKind === "high_sales_30d") return <div className="market-stage volume-stage">
-    <CardImage story={story}/><div className="volume-tally"><GradeStamp grade={story.grade}/><small>RECORDED SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>30 DAYS</b><span>{story.sales7d.toLocaleString()} in the last 7 days</span></div>
+    <CardImage story={story}/><div className="volume-tally"><GradeStamp grade={story.grade}/><small>CARD-WIDE SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>ALL GRADES · 30 DAYS</b><span>{story.sales7d.toLocaleString()} card-wide sales in the last 7 days</span></div>
   </div>;
 
   if (story.storyKind === "biggest_gain" || story.storyKind === "biggest_loss") {
     const loss = story.storyKind === "biggest_loss";
-    return <div className="market-stage mover-stage"><CardImage story={story}/><div className="mover-tally"><GradeStamp grade={story.grade}/><small>30-DAY MOVE</small><strong>{loss ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{loss ? "MOVING LOWER" : "MOVING HIGHER"}</b><span>{currency(story.currentValue)} current FMV</span></div></div>;
+    return <div className="market-stage mover-stage"><CardImage story={story}/><div className="mover-tally"><GradeStamp grade={story.grade}/><small>CARD-WIDE 30D MOVE</small><strong>{loss ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{loss ? "MOVING LOWER" : "MOVING HIGHER"}</b><span>{story.grade} estimated value<br/>{currency(story.currentValue)}</span></div></div>;
   }
 
   if (story.storyKind === "recent_sale") return <div className="market-stage sale-stage"><CardImage story={story}/><div className="sale-ticket"><GradeStamp grade={story.grade}/><small>CONFIRMED COMP</small><b>SOLD TODAY</b><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><span>{story.recentSale?.venue ?? "Recorded sale"}</span><em>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</em></div></div>;
 
   if (story.storyKind === "grade_gap") {
     const prices = story.gradePrices.length >= 2 ? story.gradePrices : [{ grade:story.grade,price:story.currentValue }];
-    return <div className="market-stage gap-stage"><CardImage story={story}/><div className="grade-ladder"><small>LATEST GRADE PRICES</small>{prices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span>{item.grade}</span><strong>{currency(item.price)}</strong>{gradePremiumLabel(prices,index) ? <em>{gradePremiumLabel(prices,index)}</em> : null}</div>)}<b>{prices[0].grade} IS {story.gradeGapMultiple.toFixed(1)}× {prices[prices.length - 1].grade}</b></div></div>;
+    return <div className="market-stage gap-stage"><CardImage story={story}/><div className="grade-ladder"><small>GRADE PRICE ESTIMATES</small>{prices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span>{item.grade}</span><strong>{currency(item.price)}</strong>{gradePremiumLabel(prices,index) ? <em>{gradePremiumLabel(prices,index)}</em> : null}</div>)}<b>{prices[0].grade} IS {story.gradeGapMultiple.toFixed(1)}× {prices[prices.length - 1].grade}</b></div></div>;
   }
 
-  if (story.storyKind === "sales_surge") return <div className="market-stage surge-stage"><CardImage story={story}/><div className="surge-tally"><GradeStamp grade={story.grade}/><small>SALES PACE</small><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><b>FASTER</b><div><span><strong>{story.sales7d}</strong>LAST 7D</span><i>→</i><span><strong>{story.previous23DaySales}</strong>PRIOR 23D</span></div></div></div>;
+  if (story.storyKind === "sales_surge") return <div className="market-stage surge-stage"><CardImage story={story}/><div className="surge-tally"><GradeStamp grade={story.grade}/><small>CARD-WIDE SALES PACE</small><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><b>FASTER</b><div><span><strong>{story.sales7d}</strong>LAST 7D</span><i>→</i><span><strong>{story.previous23DaySales}</strong>PRIOR 23D</span></div></div></div>;
 
-  if (story.storyKind === "vintage_mover") return <div className="market-stage vintage-stage"><div className="vintage-card-wrap"><CardImage story={story}/></div><div className="vintage-tally"><GradeStamp grade={story.grade}/><small>VINTAGE CARD</small><strong>{story.cardYear || "VINTAGE"}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>30-day move<br/>{currency(story.currentValue)} current FMV</span></div></div>;
+  if (story.storyKind === "vintage_mover") return <div className="market-stage vintage-stage"><div className="vintage-card-wrap"><CardImage story={story}/></div><div className="vintage-tally"><GradeStamp grade={story.grade}/><small>VINTAGE CARD</small><strong>{story.cardYear || "VINTAGE"}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>Card-wide 30-day move<br/>{story.grade} value · {currency(story.currentValue)}</span></div></div>;
 
-  return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><GradeStamp grade={story.grade}/><small>ROOKIE FMV</small><strong>{currency(story.currentValue)}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>{story.sales30d} sales · 30 days</span></div></div>;
+  const currentDirection = valueDirectionIsCurrent(story.freshnessDays);
+  return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><GradeStamp grade={story.grade}/><small>{story.grade} EST. VALUE</small><strong>{currency(story.currentValue)}</strong>{currentDirection ? <b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b> : <b>{story.sales30d} SALES</b>}<span>{currentDirection ? "Card-wide 30-day move" : "All grades · 30 days"}</span></div></div>;
 }
 
 function PlayerIndexFront({ story, open }: { story: MarketStory;open: () => void }) {
@@ -175,7 +203,7 @@ function PlayerIndexFront({ story, open }: { story: MarketStory;open: () => void
       ? [{ label:"AVERAGE SALE",value:averageSale },{ label:"RECORDED SALES",value:compactNumber(insight?.totalSales30d ?? 0) }]
       : [{ label:"TRADED VALUE",value:compactCurrency(insight?.totalValue30d ?? 0) },{ label:"RECORDED SALES",value:compactNumber(insight?.totalSales30d ?? 0) }];
   return <section className="story-face market-face market-player-index player-index-front">
-    <header><PulseLogo/><span className="live-pill">{marketFreshnessLabel(story)}</span></header>
+    <header><PulseLogo/><span className="live-pill" title={marketFreshnessDescription(story)} aria-label={marketFreshnessDescription(story)}>{marketFreshnessLabel(story)}</span></header>
     <div className="player-index-type"><b aria-hidden="true">PI</b><div><span>PLAYER INDEX</span><strong>30-DAY MARKET VIEW</strong></div></div>
     <div className="player-index-hero">
       <PlayerIndexPortrait key={story.imageUrl} story={story}/>
@@ -198,11 +226,11 @@ function PlayerIndexFront({ story, open }: { story: MarketStory;open: () => void
 
 function MarketFront({ story, open }: { story: MarketStory; open: () => void }) {
   if (story.storyKind === "player_index") return <PlayerIndexFront story={story} open={open}/>;
-  const format = MARKET_FORMATS[story.storyKind];
+  const format = marketFormat(story);
   const styleClass = kindClass(story.storyKind);
   const showCardTitle = !["player_index","player_snapshot","market_matchup"].includes(story.storyKind);
   return <section className={"story-face market-face " + styleClass}>
-    <header><PulseLogo/><span className="live-pill">{marketFreshnessLabel(story)}</span></header>
+    <header><PulseLogo/><span className="live-pill" title={marketFreshnessDescription(story)} aria-label={marketFreshnessDescription(story)}>{marketFreshnessLabel(story)}</span></header>
     <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
     <h1>{story.headline}</h1>
     <MarketFrontVisual story={story}/>
@@ -227,16 +255,12 @@ function NewsFront({ story, open }: { story: NewsStory; open: () => void }) {
 }
 
 function MetricGrid({ story }: { story: MarketStory }) {
-  return <div className="metric-grid"><div><span>7D CHANGE</span><strong>{story.change7d > 0 ? "+" : ""}{story.change7d.toFixed(1)}%</strong></div><div><span>30D CHANGE</span><strong>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</strong></div><div><span>7D SALES</span><strong>{story.sales7d}</strong></div><div><span>30D SALES</span><strong>{story.sales30d}</strong></div></div>;
+  const currentDirection = valueDirectionIsCurrent(story.freshnessDays);
+  return <div className="metric-grid">{currentDirection ? <><div><span>CARD-WIDE 7D MOVE</span><strong>{story.change7d > 0 ? "+" : ""}{story.change7d.toFixed(1)}%</strong></div><div><span>CARD-WIDE 30D MOVE</span><strong>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</strong></div></> : <><div><span>{story.grade} VALUE AGE</span><strong>{ageLabel(story.freshnessDays)}</strong></div><div><span>{story.grade} EST. VALUE</span><strong>{currency(story.currentValue)}</strong></div></>}<div><span>7D SALES · ALL GRADES</span><strong>{story.sales7d}</strong></div><div><span>30D SALES · ALL GRADES</span><strong>{story.sales30d}</strong></div></div>;
 }
 
 function SalesContextGrid({ story, surge = false }: { story: MarketStory; surge?: boolean }) {
-  return <div className="metric-grid"><div><span>7D SALES</span><strong>{story.sales7d}</strong></div><div><span>{surge ? "PRIOR 23D" : "30D SALES"}</span><strong>{surge ? story.previous23DaySales : story.sales30d}</strong></div><div><span>{surge ? "30D TOTAL" : "7D CHANGE"}</span><strong>{surge ? story.sales30d : (story.change7d > 0 ? "+" : "") + story.change7d.toFixed(1) + "%"}</strong></div><div><span>CURRENT FMV</span><strong>{currency(story.currentValue)}</strong></div></div>;
-}
-
-function priorValue(story: MarketStory) {
-  const multiplier = 1 + story.change30d / 100;
-  return multiplier > 0 ? story.currentValue / multiplier : 0;
+  return <div className="metric-grid"><div><span>7D SALES · ALL GRADES</span><strong>{story.sales7d}</strong></div><div><span>{surge ? "PRIOR 23D · ALL GRADES" : "30D SALES · ALL GRADES"}</span><strong>{surge ? story.previous23DaySales : story.sales30d}</strong></div><div><span>{surge ? "30D TOTAL · ALL GRADES" : "VALUE AGE"}</span><strong>{surge ? story.sales30d : ageLabel(story.freshnessDays)}</strong></div><div><span>{story.grade} EST. VALUE</span><strong>{currency(story.currentValue)}</strong></div></div>;
 }
 
 function preciseCurrency(value: number) {
@@ -252,17 +276,18 @@ function median(values: number[]) {
   return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
 }
 
-type StoredMarketSnapshot = { currentValue:number;sales30d:number;updatedAt:string;viewedAt:number };
+type StoredMarketSnapshot = { currentValue:number;sales30d:number;grade?:string;updatedAt:string;viewedAt:number };
 
 function visitChangeLabel(story: MarketStory, previous?: StoredMarketSnapshot) {
   if (!previous || previous.updatedAt === story.updatedAt) return null;
-  const valueChange = story.currentValue - previous.currentValue;
+  const comparableGrade = previous.grade === story.grade;
+  const valueChange = comparableGrade ? story.currentValue - previous.currentValue : 0;
   const percentChange = previous.currentValue > 0 ? valueChange / previous.currentValue * 100 : 0;
   const volumeChange = story.sales30d - previous.sales30d;
   if (Math.abs(valueChange) < 0.005 && volumeChange === 0) return null;
   const pieces:string[] = [];
-  if (Math.abs(valueChange) >= 0.005) pieces.push(`FMV ${valueChange < 0 ? "−" : "+"}${preciseCurrency(Math.abs(valueChange))} (${signedDifference(percentChange)})`);
-  if (volumeChange !== 0) pieces.push(`30-day volume ${volumeChange > 0 ? "+" : "−"}${Math.abs(volumeChange).toLocaleString()}`);
+  if (Math.abs(valueChange) >= 0.005) pieces.push(`${story.grade} value ${valueChange < 0 ? "−" : "+"}${preciseCurrency(Math.abs(valueChange))} (${signedDifference(percentChange)})`);
+  if (volumeChange !== 0) pieces.push(`card-wide 30-day sales ${volumeChange > 0 ? "+" : "−"}${Math.abs(volumeChange).toLocaleString()}`);
   return pieces.join(" · ");
 }
 
@@ -284,24 +309,25 @@ function CollectorEvidence({ story,previous }: { story: MarketStory;previous?: S
     ? `${dailySales.toFixed(dailySales >= 10 ? 0 : 1)}/DAY`
     : story.sales30d > 0 ? `1 / ${(30 / story.sales30d).toFixed(1)} DAYS` : "NO SALES";
   const paceChange = story.salesPaceMultiple > 0 ? (story.salesPaceMultiple - 1) * 100 : Number.NaN;
-  const reversal = Math.abs(story.change7d) >= 1
+  const currentDirection = valueDirectionIsCurrent(story.freshnessDays);
+  const reversal = currentDirection && Math.abs(story.change7d) >= 1
     && Math.abs(story.change30d) >= 1
     && Math.sign(story.change7d) !== Math.sign(story.change30d);
   const confidence = story.confidenceGrade === "A" ? "HIGH EVIDENCE" : story.confidenceGrade === "B" ? "GOOD EVIDENCE" : "LIMITED EVIDENCE";
   const sinceVisit = visitChangeLabel(story,previous);
 
   return <section className="collector-evidence" aria-label="Collector market evidence">
-    <header><div><span>COLLECTOR SIGNALS</span><strong>{confidence}</strong></div><b>{story.comps.length} COMPS · {marketFreshnessLabel(story)}</b></header>
+    <header><div><span>COLLECTOR SIGNALS</span><strong>{confidence}</strong></div><b>{story.comps.length} {story.grade} COMPS · {marketFreshnessLabel(story)}</b></header>
     {sinceVisit ? <p className="since-visit"><b>CHANGED SINCE YOUR LAST VIEW</b><span>{sinceVisit}</span></p> : null}
     <div className="evidence-grid">
-      <article><span>LATEST VS FMV</span><strong className={latestVsFmv < 0 ? "down" : latestVsFmv > 0 ? "up" : undefined}>{signedDifference(latestVsFmv)}</strong><small>{latest ? `${preciseCurrency(latest.price)} sale · ${preciseCurrency(story.currentValue)} FMV` : "No recent sale"}</small></article>
-      <article><span>RECENT RANGE</span><strong>{prices.length ? `${preciseCurrency(minimum)}–${preciseCurrency(maximum)}` : "N/A"}</strong><small>{prices.length ? `${stability} SPREAD · ${spread.toFixed(1)}%` : "Not enough comps"}</small></article>
-      <article><span>LIQUIDITY</span><strong>{liquidity}</strong><small>{story.sales30d.toLocaleString()} sales · 30 days</small></article>
-      <article><span>SALES PACE</span><strong className={paceChange < 0 ? "down" : paceChange > 0 ? "up" : undefined}>{signedDifference(paceChange)}</strong><small>vs preceding 23 days</small></article>
+      <article><span>LATEST {story.grade} SALE VS VALUE</span><strong className={latestVsFmv < 0 ? "down" : latestVsFmv > 0 ? "up" : undefined}>{signedDifference(latestVsFmv)}</strong><small>{latest ? `${preciseCurrency(latest.price)} sale · ${preciseCurrency(story.currentValue)} estimate` : `No recent ${story.grade} sale`}</small></article>
+      <article><span>RECENT {story.grade} RANGE</span><strong>{prices.length ? `${preciseCurrency(minimum)}–${preciseCurrency(maximum)}` : "N/A"}</strong><small>{prices.length ? `${stability} SPREAD · ${spread.toFixed(1)}%` : "Not enough comps"}</small></article>
+      <article><span>CARD-WIDE LIQUIDITY</span><strong>{liquidity}</strong><small>{story.sales30d.toLocaleString()} sales · all grades · 30 days</small></article>
+      <article><span>CARD-WIDE SALES PACE</span><strong className={paceChange < 0 ? "down" : paceChange > 0 ? "up" : undefined}>{signedDifference(paceChange)}</strong><small>all grades · vs preceding 23 days</small></article>
     </div>
     {reversal ? <p className="momentum-reversal"><b>MOMENTUM REVERSAL</b><span>{signedDifference(story.change7d)} over 7 days vs {signedDifference(story.change30d)} over 30 days</span></p> : null}
-    <div className="evidence-sales"><h2>LAST {sales.length || 3} VERIFIED SALES</h2>{sales.length ? sales.map((sale,index) => <article key={sale.date + index}><span><b>{dateLabel(sale.date)}</b><small>{sale.venue ?? "Recorded sale"}</small></span><strong>{preciseCurrency(sale.price)}</strong></article>) : <p>No recent verified sales available.</p>}</div>
-    <footer>Signals describe verified pricing activity and are not a recommendation to buy, sell or grade.</footer>
+    <div className="evidence-sales"><h2>LAST {sales.length || 3} VERIFIED {story.grade} SALES</h2>{sales.length ? sales.map((sale,index) => <article key={sale.date + index}><span><b>{dateLabel(sale.date)}</b><small>{sale.venue ?? "Recorded sale"}</small></span><strong>{preciseCurrency(sale.price)}</strong></article>) : <p>No recent verified {story.grade} sales available.</p>}</div>
+    <footer>Grade-specific values and comps are labeled separately from card-wide sales across all grades. Signals are not a recommendation to buy, sell or grade.</footer>
   </section>;
 }
 
@@ -341,28 +367,30 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
   if (story.storyKind === "market_matchup") return <><div className="matchup-detail"><span>HEAD-TO-HEAD MARKET</span>{(story.insight?.items ?? []).slice(0,2).map((market,index) => <article key={market.id}><InsightImage insight={market}/><div><small>{index === 0 ? "MARKET A" : "MARKET B"}</small><strong>{market.player}</strong><span>{market.cardTitle}</span><p><b>{market.grade}</b><b>{currency(market.currentValue)}</b><b className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</b><b>{market.sales30d} sales</b></p></div>{index === 0 ? <i>VS</i> : null}</article>)}</div></>;
   if (story.storyKind === "high_sales_30d") {
     const recentShare = story.sales30d ? Math.round((story.sales7d / story.sales30d) * 100) : 0;
-    return <><div className="volume-detail"><span>30-DAY SALES</span><strong>{story.sales30d.toLocaleString()}</strong><b>{story.sales7d} in the last 7 days</b><small>{recentShare}% of monthly sales occurred this week</small></div><MetricGrid story={story}/></>;
+    return <><div className="volume-detail"><span>CARD-WIDE SALES · ALL GRADES</span><strong>{story.sales30d.toLocaleString()}</strong><b>{story.sales7d} card-wide sales in the last 7 days</b><small>{recentShare}% of all-grade monthly sales occurred this week</small></div><MetricGrid story={story}/></>;
   }
   if (story.storyKind === "recent_sale") return <div className="receipt-detail"><span>CONFIRMED SALE · {story.grade}</span><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><div><b>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</b><small>{story.recentSale?.venue ?? "Recorded comp"}</small></div><p>Current FMV <b>{currency(story.currentValue)}</b></p></div>;
-  if (story.storyKind === "grade_gap") return <><div className="gap-detail"><span>GRADING PRICE LADDER</span><strong>{story.gradeGapMultiple.toFixed(1)}×</strong><small>{story.gradePrices[0]?.grade} TO {story.gradePrices[story.gradePrices.length - 1]?.grade} PREMIUM</small>{story.gradePrices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span><b>{item.grade}</b>{gradePremiumLabel(story.gradePrices,index) ? <small>{gradePremiumLabel(story.gradePrices,index)}</small> : null}</span><strong>{currency(item.price)}</strong></div>)}</div><div className="detail-price compact"><span>CURRENT FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong></div></>;
+  if (story.storyKind === "grade_gap") return <><div className="gap-detail"><span>GRADE PRICE ESTIMATES</span><strong>{story.gradeGapMultiple.toFixed(1)}×</strong><small>{story.gradePrices[0]?.grade} TO {story.gradePrices[story.gradePrices.length - 1]?.grade} PREMIUM</small>{story.gradePrices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span><b>{item.grade}</b>{gradePremiumLabel(story.gradePrices,index) ? <small>{gradePremiumLabel(story.gradePrices,index)}</small> : null}</span><strong>{currency(item.price)}</strong></div>)}</div><div className="detail-price compact"><span>{story.grade} ESTIMATED VALUE · {ageLabel(story.freshnessDays)}</span><strong>{currency(story.currentValue)}</strong></div></>;
   if (story.storyKind === "sales_surge") {
     const recentDaily = story.sales7d / 7;
     const priorDaily = story.previous23DaySales / 23;
     return <><div className="surge-detail"><span>SALES VELOCITY</span><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><small>FASTER DAILY PACE</small><div><p><b>{priorDaily.toFixed(1)}</b><span>DAILY · PRIOR 23D</span></p><i>→</i><p><b>{recentDaily.toFixed(1)}</b><span>DAILY · LAST 7D</span></p></div></div><SalesContextGrid story={story} surge/></>;
   }
   if (story.storyKind === "rookie_watch") {
-    return <div className="rookie-detail"><b>RC</b><div><span>ROOKIE CARD FMV · {story.grade}</span><strong>{currency(story.currentValue)}</strong><small>{story.sales30d} recorded sales in 30 days</small></div></div>;
+    return <div className="rookie-detail"><b>RC</b><div><span>{story.grade} ROOKIE ESTIMATED VALUE · {ageLabel(story.freshnessDays)}</span><strong>{currency(story.currentValue)}</strong><small>{story.sales30d} card-wide sales · all grades · 30 days</small></div></div>;
   }
   if (story.storyKind === "vintage_mover") {
-    return <div className="vintage-detail"><span>VINTAGE MARKET</span><strong>{story.cardYear || "VINTAGE"}</strong><div><p><small>CARD GRADE</small><b>{story.grade}</b></p><p><small>CURRENT FMV</small><b>{currency(story.currentValue)}</b></p></div><em className={negative ? "down" : "up"}>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}% OVER 30 DAYS</em></div>;
+    if (!valueDirectionIsCurrent(story.freshnessDays)) return <><div className="volume-detail"><span>VINTAGE CARD-WIDE SALES · ALL GRADES</span><strong>{story.sales30d.toLocaleString()}</strong><b>{story.sales7d} card-wide sales in the last 7 days</b><small>{story.grade} estimated value is {story.freshnessDays} days old</small></div><MetricGrid story={story}/></>;
+    return <div className="vintage-detail"><span>VINTAGE CARD</span><strong>{story.cardYear || "VINTAGE"}</strong><div><p><small>SELECTED GRADE</small><b>{story.grade}</b></p><p><small>{story.grade} EST. VALUE</small><b>{currency(story.currentValue)}</b></p></div><em className={negative ? "down" : "up"}>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}% CARD-WIDE MOVE · 30 DAYS</em></div>;
   }
-  const oldValue = priorValue(story);
-  const dollarMove = story.currentValue - oldValue;
-  return <div className="detail-price"><span>30-DAY CARD VALUE {story.storyKind === "biggest_loss" ? "DECLINE" : "INCREASE"} · {story.grade}</span><strong>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{currency(story.currentValue)} FMV · {(dollarMove < 0 ? "−" : "+") + currency(Math.abs(dollarMove))}</b></div>;
+  if (storyRequiresCurrentValueDirection(story.storyKind) && !valueDirectionIsCurrent(story.freshnessDays)) {
+    return <><div className="volume-detail"><span>CARD-WIDE SALES · ALL GRADES</span><strong>{story.sales30d.toLocaleString()}</strong><b>{story.sales7d} card-wide sales in the last 7 days</b><small>{story.grade} estimated value is {story.freshnessDays} days old; price direction is withheld</small></div><MetricGrid story={story}/></>;
+  }
+  return <div className="detail-price"><span>CARD-WIDE 30-DAY VALUE {story.storyKind === "biggest_loss" ? "DECLINE" : "INCREASE"}</span><strong>{negative ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{story.grade} EST. VALUE · {currency(story.currentValue)}</b></div>;
 }
 
 function MarketDetail({ story, close,previous }: { story: MarketStory; close: () => void;previous?: StoredMarketSnapshot }) {
-  const format = MARKET_FORMATS[story.storyKind];
+  const format = marketFormat(story);
   const combinedMarket = ["player_index","player_snapshot","market_matchup"].includes(story.storyKind);
   return <section className={"detail-face market-detail " + kindClass(story.storyKind)}>
     <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{format.label}</span><strong>{story.player}</strong></div><b>{format.icon}</b></header>
@@ -496,7 +524,7 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
     for (const key of storyCardKeys(story)) recentCardTimestamps.current[key] = now;
     if (story.type === "market") {
       storedMarketSnapshots.current[story.cardId] = {
-        currentValue:story.currentValue,sales30d:story.sales30d,updatedAt:story.updatedAt,viewedAt:now,
+        currentValue:story.currentValue,sales30d:story.sales30d,grade:story.grade,updatedAt:story.updatedAt,viewedAt:now,
       };
     }
     try {

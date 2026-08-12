@@ -4,6 +4,7 @@ import {
   upsertMarketStory,upsertPlayerIndexStory,type PlayerIndexMarketCandidate,
 } from "./db";
 import { marketHeadline } from "./market-headlines";
+import { storyRequiresCurrentValueDirection, valueDirectionIsCurrent } from "./market-freshness";
 import {
   buildPlayerIndexStory,PLAYER_INDEX_COOLDOWN_DAYS,PLAYER_INDEX_DAILY_MINIMUM,PLAYER_INDEX_DAILY_TARGET,
   selectFeaturedPlayerIndexes,summarizePlayerSales,type PlayerIndexCard,type PlayerIndexRecentFeature,
@@ -552,16 +553,17 @@ async function enrichCandidate(card: Candidate) {
   const salesPaceMultiple = priorDailyPace > 0 ? (sales7d / 7) / priorDailyPace : 0;
 
   const eligibleKinds:MarketStoryKind[] = [];
+  const currentValueDirection = valueDirectionIsCurrent(freshnessDays);
   if (card.discoveryKinds.includes("high_sales_30d")) eligibleKinds.push("high_sales_30d");
-  if (card.discoveryKinds.includes("biggest_gain") && change30d >= MIN_MEANINGFUL_CHANGE) eligibleKinds.push("biggest_gain");
-  if (card.discoveryKinds.includes("biggest_loss") && change30d <= -MIN_MEANINGFUL_CHANGE) eligibleKinds.push("biggest_loss");
+  if (currentValueDirection && card.discoveryKinds.includes("biggest_gain") && change30d >= MIN_MEANINGFUL_CHANGE) eligibleKinds.push("biggest_gain");
+  if (currentValueDirection && card.discoveryKinds.includes("biggest_loss") && change30d <= -MIN_MEANINGFUL_CHANGE) eligibleKinds.push("biggest_loss");
   if (recentSale) eligibleKinds.push("recent_sale");
   if (gap.prices.length >= 2) eligibleKinds.push("grade_gap");
   if (sales7d >= MIN_SURGE_7_DAY_SALES && salesPaceMultiple >= MIN_SURGE_MULTIPLE && salesPaceMultiple <= MAX_SURGE_MULTIPLE) {
     eligibleKinds.push("sales_surge");
   }
   if (Boolean(card.rookie)) eligibleKinds.push("rookie_watch");
-  if (isVintage && Math.abs(change30d) >= MIN_MEANINGFUL_CHANGE) {
+  if (currentValueDirection && isVintage && Math.abs(change30d) >= MIN_MEANINGFUL_CHANGE) {
     eligibleKinds.push("vintage_mover");
   }
   if (!eligibleKinds.length) return rejection(card,"no eligible market story format");
@@ -729,18 +731,21 @@ function paceDirection(multiple: number) {
 
 function summaryFor(facts: MarketFacts, kind: MarketStoryKind) {
   const descriptor = facts.cardTitle + " · " + facts.grade + ". ";
+  if (!valueDirectionIsCurrent(facts.freshnessDays)
+    && (storyRequiresCurrentValueDirection(kind) || kind === "rookie_watch")) {
+    return descriptor + facts.sales30d.toLocaleString() + " card-wide sales were recorded across all grades in 30 days. The "
+      + facts.grade + " estimated value is " + facts.freshnessDays + " days old, so Pulse does not infer a current price direction.";
+  }
   if (kind === "high_sales_30d") {
     const recentShare = facts.sales30d ? Math.round(facts.sales7d / facts.sales30d * 100) : 0;
-    return descriptor + facts.sales30d.toLocaleString() + " recorded 30-day sales, with " + recentShare + "% occurring in the latest seven days. The recent daily pace is " + paceDirection(facts.salesPaceMultiple) + " the preceding 23 days.";
+    return descriptor + facts.sales30d.toLocaleString() + " card-wide sales across all grades in 30 days, with " + recentShare + "% occurring in the latest seven days. The recent daily pace is " + paceDirection(facts.salesPaceMultiple) + " the preceding 23 days.";
   }
   if (kind === "biggest_gain" || kind === "biggest_loss") {
-    const multiplier = 1 + facts.change30d / 100;
-    const prior = multiplier > 0 ? facts.currentValue / multiplier : 0;
-    const dollarMove = validPrice(prior) ? Math.abs(facts.currentValue - prior) : 0;
-    return descriptor + "Estimated value moved " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days"
-      + (dollarMove ? ", a change of about " + usd(dollarMove) : "") + ", across " + facts.sales30d.toLocaleString() + " recorded sales.";
+    return descriptor + "The card-wide value signal moved " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1)
+      + "% over 30 days, across " + facts.sales30d.toLocaleString() + " sales spanning all grades. The " + facts.grade
+      + " estimated value is shown separately and is not used to calculate a dollar move.";
   }
-  if (kind === "vintage_mover") return descriptor + "This " + facts.cardYear + " card moved " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days across " + facts.sales30d.toLocaleString() + " recorded sales.";
+  if (kind === "vintage_mover") return descriptor + "The card-wide value signal for this " + facts.cardYear + " card moved " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days across " + facts.sales30d.toLocaleString() + " sales spanning all grades.";
   if (kind === "recent_sale" && facts.recentSale) {
     const difference = saleVsFmv(facts.recentSale.price,facts.currentValue);
     const comparison = Math.abs(difference) < 0.05
@@ -754,8 +759,8 @@ function summaryFor(facts: MarketFacts, kind: MarketStoryKind) {
     const premium = facts.gradePrices[0].price - low.price;
     return descriptor + ladder + ". " + facts.gradePrices[0].grade + " is priced " + usd(premium) + " above " + low.grade + ", a " + facts.gradeGapMultiple.toFixed(1) + "× multiple.";
   }
-  if (kind === "sales_surge") return descriptor + "The last seven days produced " + facts.sales7d.toLocaleString() + " sales and are running at " + facts.salesPaceMultiple.toFixed(1) + "× the daily pace of the preceding 23 days.";
-  return descriptor + "This rookie card has " + facts.sales30d.toLocaleString() + " recorded 30-day sales. Its seven-day pace is " + paceDirection(facts.salesPaceMultiple) + " the preceding 23 days, while estimated value is " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
+  if (kind === "sales_surge") return descriptor + "The last seven days produced " + facts.sales7d.toLocaleString() + " card-wide sales across all grades and are running at " + facts.salesPaceMultiple.toFixed(1) + "× the daily pace of the preceding 23 days.";
+  return descriptor + "This rookie card has " + facts.sales30d.toLocaleString() + " card-wide sales across all grades in 30 days. Its seven-day pace is " + paceDirection(facts.salesPaceMultiple) + " the preceding 23 days, while the card-wide value signal is " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days.";
 }
 
 function buildStory(facts: MarketFacts, storyKind: MarketStoryKind):MarketStory {
@@ -766,7 +771,7 @@ function buildStory(facts: MarketFacts, storyKind: MarketStoryKind):MarketStory 
       cardId:facts.cardId,player:facts.player,storyKind,change30d:facts.change30d,sales30d:facts.sales30d,
       cardYear:facts.cardYear,
       gradePrices:facts.gradePrices,gradeGapMultiple:facts.gradeGapMultiple,
-      salesPaceMultiple:facts.salesPaceMultiple,recentSale:facts.recentSale,
+      salesPaceMultiple:facts.salesPaceMultiple,recentSale:facts.recentSale,freshnessDays:facts.freshnessDays,
     }),
     summary:summaryFor(facts,storyKind),demo:false,
   };
