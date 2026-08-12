@@ -7,6 +7,7 @@ export type MarketStoryKind =
   | "sales_surge"
   | "rookie_watch"
   | "vintage_mover"
+  | "player_index"
   | "player_snapshot"
   | "price_volume"
   | "market_matchup";
@@ -35,6 +36,26 @@ export type MarketInsight = {
   flatCount?: number;
   totalSales30d?: number;
   averageChange30d?: number;
+  totalValue30d?: number;
+  averageSale30d?: number;
+  priorTotalSales30d?: number;
+  priorTotalValue30d?: number;
+  priorAverageSale30d?: number;
+  salesChange30d?: number;
+  totalValueChange30d?: number;
+  averageSaleChange30d?: number;
+  trackedCardMovement30d?: number;
+  catalogMatches?: number;
+  coverageDays?: number;
+  score?: number;
+  scoreLabel?: string;
+  scoreBreakdown?: {
+    liquidity: number;
+    momentum: number;
+    breadth: number;
+    stability: number;
+    evidence: number;
+  };
   items?: MarketInsightItem[];
 };
 

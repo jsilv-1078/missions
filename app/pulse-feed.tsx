@@ -50,6 +50,7 @@ const MARKET_FORMATS:Record<MarketStoryKind,{ label:string;icon:string;cue:strin
   sales_surge:{ label:"SALES SURGE",icon:"⚡",cue:"PACE & SALES BREAKDOWN" },
   rookie_watch:{ label:"ROOKIE WATCH",icon:"RC",cue:"ROOKIE MARKET DETAILS" },
   vintage_mover:{ label:"VINTAGE MOVER",icon:"V",cue:"ERA, VALUE & SALES" },
+  player_index:{ label:"30-DAY PLAYER INDEX",icon:"PI",cue:"VALUE, LIQUIDITY & SCORE" },
   player_snapshot:{ label:"PLAYER MARKET",icon:"P",cue:"CARDS, SALES & DIRECTION" },
   price_volume:{ label:"PRICE + VOLUME",icon:"↕",cue:"SIGNAL, LIQUIDITY & COMPS" },
   market_matchup:{ label:"MARKET MATCHUP",icon:"VS",cue:"COMPARE BOTH MARKETS" },
@@ -85,6 +86,16 @@ function gradePremiumLabel(prices: MarketStory["gradePrices"], index: number) {
 }
 
 function MarketFrontVisual({ story }: { story: MarketStory }) {
+  if (story.storyKind === "player_index") {
+    const insight = story.insight;
+    const items = insight?.items ?? [];
+    const movement = insight?.averageSaleChange30d ?? 0;
+    return <div className="player-index-stage">
+      <div className="player-index-value"><span>30-DAY TRADED VALUE</span><strong>{currency(insight?.totalValue30d ?? 0)}</strong><div><p><b>{(insight?.totalSales30d ?? 0).toLocaleString()}</b><small>SALES</small></p><p><b>{currency(insight?.averageSale30d ?? 0)}</b><small>AVG SALE</small></p><p><b className={movement < 0 ? "down" : "up"}>{moveLabel(movement)}</b><small>VS PRIOR 30D</small></p></div></div>
+      <div className="player-index-lower"><div className="player-index-cards">{items.slice(0,3).map((market,index) => <InsightImage insight={market} className={`index-card index-card-${index + 1}`} key={market.id}/>)}</div><div className="player-index-score"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "PILOT"}</b><small>LIQUIDITY + MARKET EVIDENCE</small></div></div>
+    </div>;
+  }
+
   if (story.storyKind === "player_snapshot") {
     const items = story.insight?.items ?? [];
     const average = story.insight?.averageChange30d ?? 0;
@@ -129,7 +140,7 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
 function MarketFront({ story, open }: { story: MarketStory; open: () => void }) {
   const format = MARKET_FORMATS[story.storyKind];
   const styleClass = kindClass(story.storyKind);
-  const showCardTitle = !["player_snapshot","market_matchup"].includes(story.storyKind);
+  const showCardTitle = !["player_index","player_snapshot","market_matchup"].includes(story.storyKind);
   return <section className={"story-face market-face " + styleClass}>
     <header><PulseLogo/><span className="live-pill">{marketFreshnessLabel(story)}</span></header>
     <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
@@ -234,15 +245,34 @@ function CollectorEvidence({ story,previous }: { story: MarketStory;previous?: S
   </section>;
 }
 
-function InsightMarketRows({ label, items }: { label:string; items:MarketInsightItem[] }) {
+function InsightMarketRows({ label, items,cardLevelSales = false }: { label:string; items:MarketInsightItem[];cardLevelSales?:boolean }) {
   if (!items.length) return null;
   return <section className="insight-market-list"><header>{label}</header>{items.map((market) => <article key={market.id}>
-    <InsightImage insight={market}/><div><strong>{market.player}</strong><span>{market.cardTitle}</span><small>{market.grade} · {market.sales30d.toLocaleString()} sales</small></div><aside><b>{currency(market.currentValue)}</b><em className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</em></aside>
+    <InsightImage insight={market}/><div><strong>{market.player}</strong><span>{market.cardTitle}</span><small>{market.grade}{cardLevelSales ? " representative price" : ""} · {market.sales30d.toLocaleString()} {cardLevelSales ? "card-level " : ""}sales</small></div><aside><b>{currency(market.currentValue)}</b><em className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</em></aside>
   </article>)}</section>;
 }
 
 function MarketDetailLead({ story }: { story: MarketStory }) {
   const negative = story.change30d < 0;
+  if (story.storyKind === "player_index") {
+    const insight = story.insight;
+    const breakdown = insight?.scoreBreakdown;
+    const averageMovement = insight?.averageSaleChange30d ?? 0;
+    return <>
+      <section className="player-index-detail">
+        <div className="index-score-detail"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "PILOT"}</b><small>Market activity score—not a buy or sell rating</small></div>
+        <div className="index-detail-metrics">
+          <article><span>30D TRADED VALUE</span><strong>{currency(insight?.totalValue30d ?? 0)}</strong><small>{signedDifference(insight?.totalValueChange30d ?? 0)} vs prior 30d</small></article>
+          <article><span>AVERAGE SALE</span><strong>{currency(insight?.averageSale30d ?? 0)}</strong><small className={averageMovement < 0 ? "down" : "up"}>{moveLabel(averageMovement)} vs prior 30d</small></article>
+          <article><span>RECORDED SALES</span><strong>{(insight?.totalSales30d ?? 0).toLocaleString()}</strong><small>{signedDifference(insight?.salesChange30d ?? 0)} vs prior 30d</small></article>
+          <article><span>ACTIVE CARDS</span><strong>{(insight?.cardsTracked ?? 0).toLocaleString()}</strong><small>{(insight?.catalogMatches ?? 0).toLocaleString()} exact catalog matches</small></article>
+        </div>
+      </section>
+      {breakdown ? <section className="index-score-breakdown"><header>SCORE BREAKDOWN</header>{Object.entries(breakdown).map(([label,value]) => <article key={label}><span>{label.toUpperCase()}</span><strong>{value}</strong><small>/ 100</small></article>)}</section> : null}
+      <InsightMarketRows label="MOST ACTIVE CARDS IN THIS INDEX" items={insight?.items ?? []} cardLevelSales/>
+      <p className="index-method">Uses exact-player sales recorded in 60 fully closed daily buckets: the latest 30 days versus the prior 30. Trade Score weights liquidity 35%, momentum 25%, breadth 20%, stability 10% and evidence 10%. Traded value and average sale are transaction totals; average-price movement can also reflect a change in the mix of cards sold, including bulk lots.</p>
+    </>;
+  }
   if (story.storyKind === "player_snapshot") {
     const average = story.insight?.averageChange30d ?? 0;
     return <><div className="player-detail-summary"><span>PLAYER MARKET SNAPSHOT</span><strong className={average < 0 ? "down" : "up"}>{moveLabel(average)}</strong><b>WEIGHTED 30-DAY DIRECTION</b><div><p><small>TRACKED CARDS</small><b>{story.insight?.cardsTracked ?? 0}</b></p><p><small>RECORDED SALES</small><b>{story.insight?.totalSales30d?.toLocaleString() ?? 0}</b></p></div></div><InsightMarketRows label="CARDS IN THIS SNAPSHOT" items={story.insight?.items ?? []}/></>;
@@ -273,7 +303,7 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
 
 function MarketDetail({ story, close,previous }: { story: MarketStory; close: () => void;previous?: StoredMarketSnapshot }) {
   const format = MARKET_FORMATS[story.storyKind];
-  const combinedMarket = ["player_snapshot","market_matchup"].includes(story.storyKind);
+  const combinedMarket = ["player_index","player_snapshot","market_matchup"].includes(story.storyKind);
   return <section className={"detail-face market-detail " + kindClass(story.storyKind)}>
     <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{format.label}</span><strong>{story.player}</strong></div><b>{format.icon}</b></header>
     <div className="detail-scroll">

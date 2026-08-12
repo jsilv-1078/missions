@@ -1,5 +1,9 @@
-import { beginSync, deleteMarketStoriesExcept, finishSync, updateSyncProgress, upsertMarketStory } from "./db";
+import {
+  beginSync,deleteMarketStoriesExcept,deletePlayerIndexesExcept,finishSync,updateSyncProgress,
+  upsertMarketStory,upsertPlayerIndexStory,
+} from "./db";
 import { marketHeadline } from "./market-headlines";
+import { buildPlayerIndexStory, PLAYER_INDEX_PILOTS, type PlayerIndexCard, type PlayerSalesBucket } from "./player-index";
 import type { MarketGradePrice, MarketSale, MarketStory, MarketStoryKind } from "./types";
 
 type CardSearchItem = {
@@ -22,6 +26,14 @@ type CardSearchItem = {
 type DiscoveryKind = "high_sales_30d" | "biggest_gain" | "biggest_loss" | "rookie_watch" | "vintage_mover" | "grade_premium";
 type Candidate = CardSearchItem & { discoveryKinds: DiscoveryKind[] };
 type GradeSelection = { grade:string;price:number;fmvPayload?:Record<string,unknown> };
+type PlayerSalesStatsResult = {
+  player:string;
+  buckets?:Array<{
+    start:string;end:string;count:number;total_amount:number;average_sale:number;partial?:boolean;
+  }>;
+};
+type PlayerSalesStatsResponse = { results?:PlayerSalesStatsResult[] };
+type PlayerCardSearchResponse = { cards?:CardSearchItem[];count?:number;pages?:number };
 
 type MarketFacts = Omit<MarketStory,"id" | "type" | "storyKind" | "headline" | "summary" | "demo"> & {
   eligibleKinds: MarketStoryKind[];
@@ -169,6 +181,85 @@ function pickGrade(card: CardSearchItem):GradeSelection | undefined {
     ?? prices.find((item) => item.grade === "Raw")
     ?? prices[0];
   return selected ? { grade:selected.grade,price:Number(selected.price ?? 0) } : undefined;
+}
+
+function playerIndexCard(card: CardSearchItem,player: string):PlayerIndexCard | null {
+  if (normalized(card.player) !== normalized(player)) return null;
+  const imageUrl = normalizedImage(card.image);
+  const selected = pickGrade(card);
+  const sales30d = Number(card["30 Day Sales"] ?? 0);
+  const change30d = Number(card.gain_30day ?? card.gain ?? 0);
+  if (!imageUrl || !selected || !validPrice(selected.price)) return null;
+  if (!Number.isFinite(sales30d) || sales30d <= 0) return null;
+  if (!Number.isFinite(change30d) || Math.abs(change30d) > MAX_ABS_CHANGE_30D) return null;
+  return {
+    id:card.card_id,player,sport:displayCategory(card.category),cardTitle:card.description,imageUrl,
+    grade:selected.grade,currentValue:selected.price,change30d,sales30d,
+  };
+}
+
+function playerSalesBuckets(value: PlayerSalesStatsResult) {
+  return (value?.buckets ?? []).flatMap((bucket):PlayerSalesBucket[] => {
+    const count = Number(bucket.count ?? 0);
+    const totalAmount = Number(bucket.total_amount ?? 0);
+    const averageSale = Number(bucket.average_sale ?? (count > 0 ? totalAmount / count : 0));
+    if (!bucket.start || !bucket.end || !Number.isFinite(count) || !Number.isFinite(totalAmount)) return [];
+    return [{ start:bucket.start,end:bucket.end,count,totalAmount,averageSale,partial:Boolean(bucket.partial) }];
+  });
+}
+
+async function syncPlayerIndexes() {
+  const players = PLAYER_INDEX_PILOTS.map((pilot) => pilot.player);
+  const errors:string[] = [];
+  try {
+    const [stats,searches] = await Promise.all([
+      cardHedgeFetch<PlayerSalesStatsResponse>("/v1/cards/sales-stats-by-player",{
+        players,interval:"day",periods:60,include_current:false,
+      }),
+      Promise.all(PLAYER_INDEX_PILOTS.map(async (pilot) => {
+        try {
+          return await cardHedgeFetch<PlayerCardSearchResponse>("/v1/cards/search-cards-wsort",{
+            player:pilot.player,category:pilot.sport,page:1,page_size:100,
+            sort_by:"sales_30day",sort_order:"desc",
+          });
+        } catch (error) {
+          errors.push(`${pilot.player}: ${error instanceof Error ? error.message : "card search failed"}`);
+          return { cards:[],count:0,pages:0 };
+        }
+      })),
+    ]);
+    let written = 0;
+    const publishedPlayers:string[] = [];
+    for (let index = 0; index < PLAYER_INDEX_PILOTS.length; index += 1) {
+      const pilot = PLAYER_INDEX_PILOTS[index];
+      const statsResult = stats.results?.find((result) => normalized(result.player) === normalized(pilot.player));
+      const search = searches[index];
+      if (!statsResult) {
+        errors.push(`${pilot.player}: no player sales statistics returned`);
+        continue;
+      }
+      const cards = (search.cards ?? []).flatMap((card) => {
+        const parsed = playerIndexCard(card,pilot.player);
+        return parsed ? [parsed] : [];
+      });
+      const story = buildPlayerIndexStory({
+        player:pilot.player,sport:pilot.sport,buckets:playerSalesBuckets(statsResult),cards,
+        catalogMatches:Number(search.count ?? search.cards?.length ?? 0),updatedAt:new Date().toISOString(),
+      });
+      if (!story) {
+        errors.push(`${pilot.player}: insufficient 60-day sales coverage or active card breadth`);
+        continue;
+      }
+      await upsertPlayerIndexStory(story,false);
+      written += 1;
+      publishedPlayers.push(pilot.player);
+    }
+    if (written > 0) await deletePlayerIndexesExcept(players);
+    return { requested:players.length,written,publishedPlayers,errors };
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : "player sales request failed");
+    return { requested:players.length,written:0,publishedPlayers:[] as string[],errors };
+  }
 }
 
 function gradeValue(label: string) {
@@ -697,13 +788,13 @@ export async function syncMarketData() {
   let written = 0;
   try {
     await reportSyncStage(runId,"discovery","Searching for modern cards, grading premiums and verified vintage years…");
-    const discovery = await discoverCandidates();
+    const [discovery,playerIndexes] = await Promise.all([discoverCandidates(),syncPlayerIndexes()]);
     const candidates = discovery.candidates;
     seen = candidates.length;
     await reportSyncStage(
       runId,"valuation",
       "Confirmed " + candidates.length + " candidates, including " + discovery.stats.selectedVintageCards + " vintage. Checking grades and valuations…",
-      candidates.length,0,discovery.stats,
+      candidates.length,0,{ ...discovery.stats,playerIndexes },
     );
     const enriched = await mapWithConcurrency(candidates,ENRICH_CONCURRENCY,enrichCandidate);
     const qualified = enriched.flatMap((item) => item.facts ? [item.facts] : []);
@@ -758,17 +849,19 @@ export async function syncMarketData() {
       deleted,reasonCounts,typeCounts,categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,
       vintageGradeCounts,uniquePlayers:Object.keys(playerStoryCounts).length,
       repeatedPlayers:Object.fromEntries(Object.entries(playerStoryCounts).filter(([,count]) => count > 1)),
-      discovery:discovery.stats,
+      discovery:discovery.stats,playerIndexes,
     }));
     const categorySummary = (Object.keys(CATEGORY_TARGETS) as TargetCategory[])
       .map((category) => category + " " + (categoryCounts[category] ?? 0) + "/" + CATEGORY_TARGETS[category])
       .join(" · ");
+    const playerIndexSummary = `Player Index ${playerIndexes.written}/${playerIndexes.requested}`
+      + (playerIndexes.errors.length ? ` (${playerIndexes.errors.join("; ")})` : "");
     const message = "Market sync completed: " + stories.length + " published, " + rejected.length + " rejected, " + deleted
-      + " stale removed. Mix: " + categorySummary;
+      + " stale removed. " + playerIndexSummary + ". Mix: " + categorySummary;
     await finishSync(runId,"success",candidates.length,stories.length,message);
     return {
       status:"success",seen:candidates.length,written:stories.length,rejected:rejected.length,deleted,message,
-      categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,
+      categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,playerIndexes,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown market sync error";
