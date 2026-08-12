@@ -1,9 +1,10 @@
 import type { FeedStory } from "@/lib/types";
 
-const PLAYER_WINDOW = 8;
+const PLAYER_WINDOW = 12;
 const FORMAT_WINDOW = 8;
 const SPORT_WINDOW = 8;
 const CARD_WINDOW = 20;
+const PLAYER_EXPOSURE_PENALTY = 5000;
 export const RECENT_CARD_COOLDOWN_MS = 72 * 60 * 60 * 1000;
 
 export type RemixFeedOptions = {
@@ -15,8 +16,12 @@ function normalized(value: string) {
   return value.trim().toLocaleLowerCase();
 }
 
-function playerKey(story: FeedStory) {
-  return normalized(story.player);
+export function storyPlayerKeys(story: FeedStory) {
+  const players = [story.player];
+  if (story.type === "market") {
+    players.push(...(story.insight?.items?.map((item) => item.player) ?? []));
+  }
+  return [...new Set(players.map(normalized).filter(Boolean))];
 }
 
 function formatKey(story: FeedStory) {
@@ -36,6 +41,11 @@ export function storyCardKeys(story: FeedStory) {
 function storiesShareCard(first: FeedStory, second: FeedStory) {
   const firstKeys = new Set(storyCardKeys(first));
   return storyCardKeys(second).some((key) => firstKeys.has(key));
+}
+
+function storiesSharePlayer(first: FeedStory, second: FeedStory) {
+  const firstKeys = new Set(storyPlayerKeys(first));
+  return storyPlayerKeys(second).some((key) => firstKeys.has(key));
 }
 
 function lastGap(history: FeedStory[], predicate: (story: FeedStory) => boolean) {
@@ -75,7 +85,7 @@ function noveltyPenalty(
   const cardGap = lastGap(history.slice(-CARD_WINDOW),(candidate) => storiesShareCard(candidate,story));
   if (cardGap <= CARD_WINDOW) penalty += 9000 + (CARD_WINDOW - cardGap) * 300;
 
-  const playerGap = lastGap(history.slice(-PLAYER_WINDOW),(candidate) => playerKey(candidate) === playerKey(story));
+  const playerGap = lastGap(history.slice(-PLAYER_WINDOW),(candidate) => storiesSharePlayer(candidate,story));
   if (playerGap <= PLAYER_WINDOW) penalty += 900 + (PLAYER_WINDOW - playerGap + 1) * 350;
 
   const formatCount = recentCount(history,FORMAT_WINDOW,(candidate) => formatKey(candidate) === formatKey(story));
@@ -104,6 +114,10 @@ export function remixFeedStories(
   const history = Array.isArray(previous) ? [...previous] : previous ? [previous] : [];
   const recentCardTimestamps = options.recentCardTimestamps ?? {};
   const now = options.now ?? Date.now();
+  const playerExposureCounts = history.reduce<Map<string,number>>((counts,story) => {
+    for (const key of storyPlayerKeys(story)) counts.set(key,(counts.get(key) ?? 0) + 1);
+    return counts;
+  },new Map());
 
   while (pool.length > 0) {
     const last = history.at(-1);
@@ -112,17 +126,15 @@ export function remixFeedStories(
       counts.set(key,(counts.get(key) ?? 0) + 1);
       return counts;
     },new Map());
-    const remainingPlayers = pool.reduce<Map<string,number>>((counts,story) => {
-      const key = playerKey(story);
-      counts.set(key,(counts.get(key) ?? 0) + 1);
-      return counts;
-    },new Map());
     let eligibleIndexes = pool.map((_,index) => index);
     if (last) {
       const differentCard = eligibleIndexes.filter((index) => !storiesShareCard(last,pool[index]));
       if (differentCard.length) eligibleIndexes = differentCard;
-      const differentPlayer = eligibleIndexes.filter((index) => playerKey(pool[index]) !== playerKey(last));
-      if (differentPlayer.length) eligibleIndexes = differentPlayer;
+      const recentHistory = history.slice(-PLAYER_WINDOW);
+      const differentRecentPlayer = eligibleIndexes.filter((index) =>
+        !recentHistory.some((previousStory) => storiesSharePlayer(previousStory,pool[index])),
+      );
+      if (differentRecentPlayer.length) eligibleIndexes = differentRecentPlayer;
       const differentFormat = eligibleIndexes.filter((index) => formatKey(pool[index]) !== formatKey(last));
       if (differentFormat.length) eligibleIndexes = differentFormat;
     }
@@ -130,9 +142,12 @@ export function remixFeedStories(
     let selectedPenalty = Number.POSITIVE_INFINITY;
     for (const index of eligibleIndexes) {
       const story = pool[index];
-      const inventoryBonus = (remainingFormats.get(formatKey(story)) ?? 0) * 220
-        + (remainingPlayers.get(playerKey(story)) ?? 0) * 80;
-      const penalty = noveltyPenalty(story,history,recentCardTimestamps,now) - inventoryBonus;
+      const playerExposure = storyPlayerKeys(story).reduce(
+        (highest,key) => Math.max(highest,playerExposureCounts.get(key) ?? 0),0,
+      );
+      const inventoryBonus = (remainingFormats.get(formatKey(story)) ?? 0) * 220;
+      const penalty = noveltyPenalty(story,history,recentCardTimestamps,now)
+        + playerExposure * PLAYER_EXPOSURE_PENALTY - inventoryBonus;
       if (penalty >= selectedPenalty) continue;
       selectedIndex = index;
       selectedPenalty = penalty;
@@ -140,6 +155,9 @@ export function remixFeedStories(
     const [next] = pool.splice(selectedIndex,1);
     ordered.push(next);
     history.push(next);
+    for (const key of storyPlayerKeys(next)) {
+      playerExposureCounts.set(key,(playerExposureCounts.get(key) ?? 0) + 1);
+    }
     if (history.length > CARD_WINDOW) history.shift();
   }
 

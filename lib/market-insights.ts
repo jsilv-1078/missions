@@ -94,13 +94,23 @@ function priceVolumeSignals(markets: MarketStory[]) {
   const medianSales = bySales[Math.floor(bySales.length / 2)]?.sales30d ?? 0;
   const ranked = [...markets].sort((a,b) => b.sales30d - a.sales30d || Math.abs(b.change30d) - Math.abs(a.change30d));
   const selected:MarketStory[] = [];
+  const selectedPlayers = new Set<string>();
   for (const marketDirection of ["rising","falling","flat"]) {
-    const match = ranked.find((story) => direction(story.change30d) === marketDirection);
-    if (match && !selected.some((story) => story.cardId === match.cardId)) selected.push(match);
+    const match = ranked.find((story) =>
+      direction(story.change30d) === marketDirection && !selectedPlayers.has(normalized(story.player)),
+    );
+    if (match && !selected.some((story) => story.cardId === match.cardId)) {
+      selected.push(match);
+      selectedPlayers.add(normalized(match.player));
+    }
   }
   for (const story of ranked) {
     if (selected.length >= MAX_PRICE_VOLUME_STORIES) break;
-    if (!selected.some((candidate) => candidate.cardId === story.cardId)) selected.push(story);
+    const player = normalized(story.player);
+    if (!selected.some((candidate) => candidate.cardId === story.cardId) && !selectedPlayers.has(player)) {
+      selected.push(story);
+      selectedPlayers.add(player);
+    }
   }
   return selected.slice(0,MAX_PRICE_VOLUME_STORIES).map((story) => {
     const active = story.sales30d >= medianSales;
@@ -146,15 +156,21 @@ function marketMatchups(markets: MarketStory[]) {
   }).sort((a,b) => b.combinedSales - a.combinedSales || a.salesRatio - b.salesRatio);
 
   const usedCardIds = new Set<string>();
+  const usedPlayers = new Set<string>();
   const sportCounts = new Map<string,number>();
   const selected:MarketStory[] = [];
   for (const candidate of candidates) {
     if (selected.length >= MAX_MATCHUP_STORIES) break;
     if (usedCardIds.has(candidate.lead.cardId) || usedCardIds.has(candidate.challenger.cardId)) continue;
+    const leadPlayer = normalized(candidate.lead.player);
+    const challengerPlayer = normalized(candidate.challenger.player);
+    if (usedPlayers.has(leadPlayer) || usedPlayers.has(challengerPlayer)) continue;
     const sportKey = normalized(candidate.lead.sport);
     if ((sportCounts.get(sportKey) ?? 0) >= 2) continue;
     usedCardIds.add(candidate.lead.cardId);
     usedCardIds.add(candidate.challenger.cardId);
+    usedPlayers.add(leadPlayer);
+    usedPlayers.add(challengerPlayer);
     sportCounts.set(sportKey,(sportCounts.get(sportKey) ?? 0) + 1);
     const volumeGap = Math.round(Math.abs(candidate.lead.sales30d - candidate.challenger.sales30d) / Math.max(candidate.lead.sales30d,candidate.challenger.sales30d) * 100);
     selected.push({

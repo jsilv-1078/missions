@@ -52,7 +52,7 @@ const CATEGORY_TARGETS = {
 } as const;
 type TargetCategory = keyof typeof CATEGORY_TARGETS;
 const MAX_PUBLISHED_STORIES = Object.values(CATEGORY_TARGETS).reduce((sum,target) => sum + target,0);
-const MAX_DISCOVERY_CARDS_PER_PLAYER = 4;
+const MAX_DISCOVERY_CARDS_PER_PLAYER = 2;
 const MAX_PUBLISHED_STORIES_PER_PLAYER = 2;
 const ENRICH_CONCURRENCY = 8;
 const MIN_30_DAY_SALES = 5;
@@ -591,7 +591,11 @@ function selectStories(factsList: MarketFacts[]) {
           && facts.eligibleKinds.includes(kind)
           && (selectedByPlayer.get(player) ?? 0) < MAX_PUBLISHED_STORIES_PER_PLAYER;
       })
-      .sort((a,b) => storyScore(b,kind) - storyScore(a,kind));
+      .sort((a,b) => {
+        const playerDifference = (selectedByPlayer.get(normalized(a.player)) ?? 0)
+          - (selectedByPlayer.get(normalized(b.player)) ?? 0);
+        return playerDifference || storyScore(b,kind) - storyScore(a,kind);
+      });
     const facts = options[0];
     if (!facts) return false;
     chosenIds.add(facts.cardId);
@@ -744,11 +748,17 @@ export async function syncMarketData() {
       counts[story.grade] = (counts[story.grade] ?? 0) + 1;
       return counts;
     },{});
+    const playerStoryCounts = stories.reduce<Record<string,number>>((counts,story) => {
+      counts[story.player] = (counts[story.player] ?? 0) + 1;
+      return counts;
+    },{});
     console.info(JSON.stringify({
       level:"info",message:"Market data quality review",source:"cardhedge",runId,stage:"complete",
       durationMs:Date.now() - startedAt,seen:candidates.length,published:stories.length,rejected:rejected.length,
       deleted,reasonCounts,typeCounts,categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,
-      vintageGradeCounts,discovery:discovery.stats,
+      vintageGradeCounts,uniquePlayers:Object.keys(playerStoryCounts).length,
+      repeatedPlayers:Object.fromEntries(Object.entries(playerStoryCounts).filter(([,count]) => count > 1)),
+      discovery:discovery.stats,
     }));
     const categorySummary = (Object.keys(CATEGORY_TARGETS) as TargetCategory[])
       .map((category) => category + " " + (categoryCounts[category] ?? 0) + "/" + CATEGORY_TARGETS[category])
