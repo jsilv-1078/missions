@@ -2,7 +2,7 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { buildAutomatedMarketStories } from "./market-insights";
 import { marketHeadline } from "./market-headlines";
 import {
-  PLAYER_INDEX_DAILY_TARGET,playerIndexPortraitUrl,type PlayerIndexRecentFeature,
+  applyPlayerIndexFeature,PLAYER_INDEX_DAILY_TARGET,playerIndexPortraitUrl,type PlayerIndexRecentFeature,
 } from "./player-index";
 import type { FeedStory, MarketStory, NewArticleInput, NewsStory } from "./types";
 
@@ -371,12 +371,12 @@ function playerIndexRow(row: Record<string, unknown>):MarketStory | null {
   if (!row.story || typeof row.story !== "object") return null;
   const story = row.story as MarketStory;
   if (story.type !== "market" || story.storyKind !== "player_index" || !story.player || !story.insight) return null;
-  return {
+  return applyPlayerIndexFeature({
     ...story,
     imageUrl:playerIndexPortraitUrl(story.player) ?? story.imageUrl,
     updatedAt:new Date(String(row.source_updated_at ?? story.updatedAt)).toISOString(),
     demo:false,
-  };
+  });
 }
 
 function interleave(markets: MarketStory[], news: NewsStory[]) {
