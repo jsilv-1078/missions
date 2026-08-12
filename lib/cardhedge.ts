@@ -226,7 +226,7 @@ function playerSalesBuckets(value: PlayerSalesStatsResult) {
   });
 }
 
-async function syncPlayerIndexes() {
+export async function syncPlayerIndexes() {
   const players = PLAYER_INDEX_PILOTS.map((pilot) => pilot.player);
   const errors:string[] = [];
   try {
