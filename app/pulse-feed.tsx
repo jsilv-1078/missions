@@ -16,6 +16,14 @@ type PreferenceChange = (player: string,action: PreferenceAction) => void;
 
 const EMPTY_PLAYER_PREFERENCES:PlayerPreferences = { version:1,followed:[],less:[] };
 
+function StarIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.5 6.3-.9L12 2.7Z"/></svg>;
+}
+
+function ShowLessIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 3.5h8.2c1 0 1.8.6 2.1 1.5l2 6.1c.4 1.2-.5 2.4-1.7 2.4h-4.2l.6 3.1c.3 1.5-.5 3-1.8 3.7l-.8.4-3.8-7.2H4.7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2.8v9.5"/></svg>;
+}
+
 function PreferenceControls({ player,preferences,onChange }: {
   player:string;preferences:PlayerPreferences;onChange:PreferenceChange;
 }) {
@@ -24,10 +32,10 @@ function PreferenceControls({ player,preferences,onChange }: {
   const less = preferences.less.includes(key);
   return <div className="story-preferences" aria-label={`Feed preferences for ${player}`} onTouchStart={(event) => event.stopPropagation()} onTouchEnd={(event) => event.stopPropagation()}>
     <button className={followed ? "preference-button follow active" : "preference-button follow"} type="button" aria-label={followed ? `Stop following ${player}` : `Follow ${player}`} aria-pressed={followed} title={followed ? `Following ${player}` : `Follow ${player}`} onClick={() => onChange(player,"follow")}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.5 6.3-.9L12 2.7Z"/></svg>
+      <StarIcon/>
     </button>
     <button className={less ? "preference-button less active" : "preference-button less"} type="button" aria-label={less ? `Remove show less for ${player}` : `Show less of ${player}`} aria-pressed={less} title={less ? `Showing less of ${player}` : `Show less of ${player}`} onClick={() => onChange(player,"less")}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 3.5h8.2c1 0 1.8.6 2.1 1.5l2 6.1c.4 1.2-.5 2.4-1.7 2.4h-4.2l.6 3.1c.3 1.5-.5 3-1.8 3.7l-.8.4-3.8-7.2H4.7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2.8v9.5"/></svg>
+      <ShowLessIcon/>
     </button>
   </div>;
 }
@@ -495,6 +503,10 @@ function WelcomeScreen({ start }: { start: () => void }) {
         <article><b aria-hidden="true">↑</b><div><span>SCROLL UP</span><strong>NEXT STORY</strong></div></article>
         <article><b aria-hidden="true">→</b><div><span>SWIPE RIGHT</span><strong>DETAILS &amp; STATS</strong></div></article>
       </div>
+      <div className="intro-personalize" aria-label="How to personalize your Pulse feed">
+        <div className="intro-preference-icons" aria-hidden="true"><span><StarIcon/></span><span><ShowLessIcon/></span></div>
+        <div><span>PERSONALIZE YOUR FEED</span><p><strong>FOLLOW</strong> prioritizes verified player stories. <strong>SHOW LESS</strong> moves that player later.</p></div>
+      </div>
     </div>
     <button className="intro-start" onClick={start}><span>START EXPLORING</span><b aria-hidden="true">→</b></button>
   </section>;
@@ -700,7 +712,7 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
   }
 
   function dismissIntro() {
-    document.cookie = "cm_pulse_intro_v1=seen; Path=/; Max-Age=31536000; SameSite=Lax";
+    document.cookie = "cm_pulse_intro_v2=seen; Path=/; Max-Age=31536000; SameSite=Lax";
     setShowIntro(false);
   }
 
