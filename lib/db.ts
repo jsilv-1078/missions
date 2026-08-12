@@ -181,7 +181,8 @@ function publicMarketCopy(value: unknown) {
   return String(value)
     .replace(/Current Card Hedge FMV/gi,"Current estimated value")
     .replace(/Card Hedge identifies this as a rookie card with/gi,"This rookie card has")
-    .replace(/Card Hedge/gi,"Market data");
+    .replace(/Card Hedge/gi,"Market data")
+    .replace(/\bissue\b/gi,"card");
 }
 
 function displayNewsImage(value: unknown) {

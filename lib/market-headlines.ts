@@ -126,7 +126,7 @@ export function marketHeadline({
       "Vintage watch: " + player + " shifts " + change + "%",
       player + "’s " + year + " card makes a vintage move",
       "A vintage card shifts for " + player,
-      year + " " + player + " issue changes " + change + "%",
+      year + " " + player + " card changes " + change + "%",
       "Collectors track a new move in this " + player + " vintage card",
     ],variant);
   }

@@ -542,7 +542,7 @@ function summaryFor(facts: MarketFacts, kind: MarketStoryKind) {
     return descriptor + "Estimated value moved " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days"
       + (dollarMove ? ", a change of about " + usd(dollarMove) : "") + ", across " + facts.sales30d.toLocaleString() + " recorded sales.";
   }
-  if (kind === "vintage_mover") return descriptor + "This " + facts.cardYear + " issue moved " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days across " + facts.sales30d.toLocaleString() + " recorded sales.";
+  if (kind === "vintage_mover") return descriptor + "This " + facts.cardYear + " card moved " + (facts.change30d < 0 ? "down " : "up ") + Math.abs(facts.change30d).toFixed(1) + "% over 30 days across " + facts.sales30d.toLocaleString() + " recorded sales.";
   if (kind === "recent_sale" && facts.recentSale) {
     const difference = saleVsFmv(facts.recentSale.price,facts.currentValue);
     const comparison = Math.abs(difference) < 0.05
