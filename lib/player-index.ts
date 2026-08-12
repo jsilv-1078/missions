@@ -1,4 +1,8 @@
-import type { MarketInsightItem, MarketStory } from "./types";
+import type { MarketInsightItem, MarketStory, PlayerIndexFeatureMetric } from "./types";
+
+export const PLAYER_INDEX_DAILY_TARGET = 8;
+export const PLAYER_INDEX_DAILY_MINIMUM = 6;
+export const PLAYER_INDEX_COOLDOWN_DAYS = 3;
 
 export const PLAYER_INDEX_PILOTS = [
   { player:"Kobe Bryant",sport:"Basketball",imageUrl:"https://cdn.nba.com/headshots/nba/latest/1040x760/977.png" },
@@ -21,6 +25,25 @@ export type PlayerSalesBucket = {
 };
 
 export type PlayerIndexCard = MarketInsightItem;
+
+export type PlayerIndexRecentFeature = {
+  player: string;
+  featuredOn: string;
+  averageSaleChange30d: number;
+  salesChange30d: number;
+  totalValueChange30d: number;
+  score: number;
+};
+
+export type PlayerSalesSummary = {
+  currentBuckets: PlayerSalesBucket[];
+  priorBuckets: PlayerSalesBucket[];
+  current: { count:number;totalAmount:number;averageSale:number };
+  prior: { count:number;totalAmount:number;averageSale:number };
+  averageSaleChange30d: number;
+  salesChange30d: number;
+  totalValueChange30d: number;
+};
 
 type BuildPlayerIndexInput = {
   player: string;
@@ -84,6 +107,23 @@ function bucketTotals(buckets: PlayerSalesBucket[]) {
   return { count,totalAmount,averageSale:count > 0 ? totalAmount / count : 0 };
 }
 
+export function summarizePlayerSales(buckets: PlayerSalesBucket[]):PlayerSalesSummary | null {
+  const ordered = buckets.filter(validBucket).sort((first,second) => Date.parse(first.start) - Date.parse(second.start));
+  const currentBuckets = ordered.slice(-30);
+  const priorBuckets = ordered.slice(-60,-30);
+  if (currentBuckets.length < MIN_CURRENT_DAYS || priorBuckets.length < MIN_PRIOR_DAYS) return null;
+  const current = bucketTotals(currentBuckets);
+  const prior = bucketTotals(priorBuckets);
+  if (current.count < MIN_CURRENT_SALES || prior.count < MIN_CURRENT_SALES) return null;
+  if (current.totalAmount <= 0 || prior.totalAmount <= 0) return null;
+  return {
+    currentBuckets,priorBuckets,current,prior,
+    averageSaleChange30d:percentageChange(current.averageSale,prior.averageSale),
+    salesChange30d:percentageChange(current.count,prior.count),
+    totalValueChange30d:percentageChange(current.totalAmount,prior.totalAmount),
+  };
+}
+
 function scoreLabel(score: number) {
   if (score >= 80) return "VERY ACTIVE";
   if (score >= 65) return "ACTIVE";
@@ -103,11 +143,11 @@ function headlineFor(player: string,sales: number,totalValue: number,averageSale
 }
 
 export function buildPlayerIndexStory(input: BuildPlayerIndexInput):MarketStory | null {
-  const ordered = input.buckets.filter(validBucket).sort((first,second) => Date.parse(first.start) - Date.parse(second.start));
-  const currentBuckets = ordered.slice(-30);
-  const priorBuckets = ordered.slice(-60,-30);
-  const current = bucketTotals(currentBuckets);
-  const prior = bucketTotals(priorBuckets);
+  const salesSummary = summarizePlayerSales(input.buckets);
+  if (!salesSummary) return null;
+  const {
+    currentBuckets,current,prior,averageSaleChange30d,salesChange30d,totalValueChange30d,
+  } = salesSummary;
   const cards = [...new Map(input.cards.map((card) => [card.id,card])).values()]
     .filter((card) => normalized(card.player) === normalized(input.player)
       && Number.isFinite(card.currentValue) && card.currentValue > 0
@@ -115,13 +155,8 @@ export function buildPlayerIndexStory(input: BuildPlayerIndexInput):MarketStory 
       && Number.isFinite(card.change30d))
     .sort((first,second) => second.sales30d - first.sales30d);
 
-  if (currentBuckets.length < MIN_CURRENT_DAYS || priorBuckets.length < MIN_PRIOR_DAYS) return null;
-  if (current.count < MIN_CURRENT_SALES || prior.count < MIN_CURRENT_SALES) return null;
   if (cards.length < MIN_TRACKED_CARDS || current.totalAmount <= 0 || prior.totalAmount <= 0) return null;
 
-  const averageSaleChange30d = percentageChange(current.averageSale,prior.averageSale);
-  const salesChange30d = percentageChange(current.count,prior.count);
-  const totalValueChange30d = percentageChange(current.totalAmount,prior.totalAmount);
   const totalCardSales = sum(cards.map((card) => card.sales30d));
   const trackedCardMovement30d = totalCardSales > 0
     ? sum(cards.map((card) => card.change30d * card.sales30d)) / totalCardSales
@@ -172,4 +207,174 @@ export function buildPlayerIndexStory(input: BuildPlayerIndexInput):MarketStory 
     },
     updatedAt,demo:false,
   };
+}
+
+type FeatureSignal = {
+  metric: PlayerIndexFeatureMetric;
+  value: number;
+  label: string;
+  direction: "up" | "down" | "neutral";
+  strength: number;
+  reason: string;
+};
+
+function sameDirection(first: number,second: number) {
+  return Math.sign(first) !== 0 && Math.sign(first) === Math.sign(second);
+}
+
+function featureHeadline(story: MarketStory,signal: FeatureSignal) {
+  const count = story.insight?.totalSales30d ?? story.sales30d;
+  if (signal.metric === "average_sale_change") {
+    return `${story.player} average sale ${signal.direction === "up" ? "rises" : "falls"} ${Math.abs(signal.value).toFixed(1)}% across ${count.toLocaleString()} sales`;
+  }
+  if (signal.metric === "sales_change") {
+    return `${story.player} recorded sales ${signal.direction === "up" ? "increase" : "decrease"} ${Math.abs(signal.value).toFixed(1)}% over the prior 30 days`;
+  }
+  if (signal.metric === "traded_value_change") {
+    return `${story.player} traded value ${signal.direction === "up" ? "rises" : "falls"} ${Math.abs(signal.value).toFixed(1)}% over the prior 30 days`;
+  }
+  if (signal.metric === "market_breadth") {
+    return `${Math.round(signal.value)}% of tracked ${story.player} cards are ${signal.direction === "up" ? "rising" : "falling"}`;
+  }
+  return `${story.player} cards record ${usd(signal.value)} in 30-day traded value`;
+}
+
+/**
+ * Chooses the strongest verified reason to feature an index. Average-sale movement
+ * only wins when card-level movement or market breadth supports the same direction.
+ */
+export function applyPlayerIndexFeature(story: MarketStory):MarketStory {
+  if (story.storyKind !== "player_index" || !story.insight) return story;
+  const insight = story.insight;
+  const averageSaleChange = insight.averageSaleChange30d ?? 0;
+  const salesChange = insight.salesChange30d ?? 0;
+  const valueChange = insight.totalValueChange30d ?? 0;
+  const trackedMovement = insight.trackedCardMovement30d ?? 0;
+  const cardsTracked = Math.max(1,insight.cardsTracked ?? 0);
+  const risingShare = (insight.risingCount ?? 0) / cardsTracked * 100;
+  const fallingShare = (insight.fallingCount ?? 0) / cardsTracked * 100;
+  const breadthDirection = risingShare >= fallingShare ? 1 : -1;
+  const breadthShare = Math.max(risingShare,fallingShare);
+  const breadthNet = risingShare - fallingShare;
+  const liquidity = insight.scoreBreakdown?.liquidity ?? 0;
+  const evidence = insight.scoreBreakdown?.evidence ?? 0;
+  const breadthSupport = clamp(Math.abs(breadthNet) * 1.5);
+  const signals:FeatureSignal[] = [];
+  const averageConfirmed = Math.abs(averageSaleChange) >= 5 && (
+    (Math.abs(trackedMovement) >= 1 && sameDirection(averageSaleChange,trackedMovement))
+    || (Math.abs(breadthNet) >= 20 && sameDirection(averageSaleChange,breadthNet))
+  );
+
+  if (averageConfirmed) signals.push({
+    metric:"average_sale_change",value:averageSaleChange,label:"AVERAGE SALE",
+    direction:averageSaleChange > 0 ? "up" : "down",strength:clamp(Math.abs(averageSaleChange) / 40 * 100),
+    reason:"Average-sale movement is confirmed by card-level direction.",
+  });
+  if (Math.abs(salesChange) >= 20) signals.push({
+    metric:"sales_change",value:salesChange,label:"RECORDED SALES",
+    direction:salesChange > 0 ? "up" : "down",strength:clamp(Math.abs(salesChange) / 80 * 100),
+    reason:"Recorded sales changed materially versus the prior 30 days.",
+  });
+  if (Math.abs(valueChange) >= 20) signals.push({
+    metric:"traded_value_change",value:valueChange,label:"TRADED VALUE",
+    direction:valueChange > 0 ? "up" : "down",strength:clamp(Math.abs(valueChange) / 80 * 100),
+    reason:"Total traded value changed materially versus the prior 30 days.",
+  });
+  if (Math.abs(breadthNet) >= 25 && breadthShare >= 55) signals.push({
+    metric:"market_breadth",value:breadthShare,label:"TRACKED CARDS",
+    direction:breadthDirection > 0 ? "up" : "down",strength:clamp(Math.abs(breadthNet) / 60 * 100),
+    reason:"A clear majority of tracked cards are moving in the same direction.",
+  });
+  if ((insight.totalSales30d ?? 0) >= 100 && (insight.totalValue30d ?? 0) >= 10_000) signals.push({
+    metric:"traded_value",value:insight.totalValue30d ?? 0,label:"30-DAY TRADED VALUE",direction:"neutral",
+    strength:clamp(Math.log10((insight.totalValue30d ?? 0) + 1) / 7 * 100),
+    reason:"Verified liquidity and traded value make this player market notable.",
+  });
+
+  const ranked = signals.map((signal) => ({
+    signal,
+    score:Math.round(signal.strength * .55 + liquidity * .20 + evidence * .15 + breadthSupport * .10),
+  })).sort((first,second) => second.score - first.score);
+  const selected = ranked[0] ?? {
+    signal:{
+      metric:"traded_value" as const,value:insight.totalValue30d ?? 0,label:"30-DAY TRADED VALUE",
+      direction:"neutral" as const,strength:0,reason:"This is the strongest available verified player-market signal.",
+    },
+    score:Math.round(liquidity * .6 + evidence * .4),
+  };
+  return {
+    ...story,
+    headline:featureHeadline(story,selected.signal),
+    insight:{
+      ...insight,featureMetric:selected.signal.metric,featureValue:selected.signal.value,
+      featureLabel:selected.signal.label,featureDirection:selected.signal.direction,
+      featureScore:selected.score,selectionReason:selected.signal.reason,
+    },
+  };
+}
+
+function daysBetween(first: string,second: string) {
+  const difference = Date.parse(first) - Date.parse(second);
+  return Number.isFinite(difference) ? Math.floor(difference / 86_400_000) : Number.POSITIVE_INFINITY;
+}
+
+function materiallyChanged(story: MarketStory,recent: PlayerIndexRecentFeature) {
+  const insight = story.insight;
+  if (!insight) return false;
+  return Math.abs((insight.averageSaleChange30d ?? 0) - recent.averageSaleChange30d) >= 5
+    || Math.abs((insight.salesChange30d ?? 0) - recent.salesChange30d) >= 25
+    || Math.abs((insight.totalValueChange30d ?? 0) - recent.totalValueChange30d) >= 25
+    || Math.abs((insight.score ?? 0) - recent.score) >= 10;
+}
+
+export function selectFeaturedPlayerIndexes(
+  stories: MarketStory[],
+  recentFeatures: PlayerIndexRecentFeature[] = [],
+  options: { target?:number;now?:string } = {},
+) {
+  const target = Math.max(1,Math.min(PLAYER_INDEX_DAILY_TARGET,options.target ?? PLAYER_INDEX_DAILY_TARGET));
+  const now = options.now ?? new Date().toISOString();
+  const recentByPlayer = new Map(recentFeatures.map((feature) => [normalized(feature.player),feature]));
+  const candidates = stories.map(applyPlayerIndexFeature).filter((story) => {
+    const featureScore = story.insight?.featureScore ?? 0;
+    if (featureScore < 40 || !story.imageUrl) return false;
+    const recent = recentByPlayer.get(normalized(story.player));
+    if (!recent) return true;
+    const age = daysBetween(now,recent.featuredOn);
+    return age >= PLAYER_INDEX_COOLDOWN_DAYS || materiallyChanged(story,recent);
+  });
+  const availableSports = new Set(candidates.map((story) => normalized(story.sport))).size;
+  const sportMaximum = availableSports >= 3 ? 2 : 3;
+  const selected:MarketStory[] = [];
+  const pool = [...candidates];
+  const sportCounts = new Map<string,number>();
+  const metricCounts = new Map<string,number>();
+
+  while (pool.length && selected.length < target) {
+    let bestIndex = -1;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (let index = 0; index < pool.length; index += 1) {
+      const story = pool[index];
+      const sport = normalized(story.sport);
+      if ((sportCounts.get(sport) ?? 0) >= sportMaximum) continue;
+      const metric = story.insight?.featureMetric ?? "traded_value";
+      const recent = recentByPlayer.get(normalized(story.player));
+      const recentPenalty = recent ? 15 : 0;
+      const adjusted = (story.insight?.featureScore ?? 0)
+        - (sportCounts.get(sport) ?? 0) * 12
+        - (metricCounts.get(metric) ?? 0) * 7
+        - recentPenalty;
+      if (adjusted <= bestScore) continue;
+      bestIndex = index;
+      bestScore = adjusted;
+    }
+    if (bestIndex < 0) break;
+    const [story] = pool.splice(bestIndex,1);
+    selected.push(story);
+    const sport = normalized(story.sport);
+    const metric = story.insight?.featureMetric ?? "traded_value";
+    sportCounts.set(sport,(sportCounts.get(sport) ?? 0) + 1);
+    metricCounts.set(metric,(metricCounts.get(metric) ?? 0) + 1);
+  }
+  return selected;
 }

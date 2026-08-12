@@ -93,6 +93,23 @@ function moveLabel(value: number) {
   return `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}%`;
 }
 
+function playerIndexFeature(story: MarketStory) {
+  const insight = story.insight;
+  const metric = insight?.featureMetric ?? "average_sale_change";
+  const value = insight?.featureValue ?? insight?.averageSaleChange30d ?? 0;
+  const direction = insight?.featureDirection ?? (value > 0 ? "up" : value < 0 ? "down" : "neutral");
+  if (metric === "market_breadth") return {
+    display:`${Math.round(value)}%`,label:`TRACKED CARDS ${direction === "up" ? "RISING" : "FALLING"}`,
+    context:"CURRENT 30-DAY BREADTH",direction,
+  };
+  if (metric === "traded_value") return {
+    display:compactCurrency(value),label:"TRADED IN 30 DAYS",context:"VERIFIED PLAYER MARKET",direction,
+  };
+  const label = metric === "sales_change" ? "RECORDED SALES"
+    : metric === "traded_value_change" ? "TRADED VALUE" : "AVERAGE SALE";
+  return { display:moveLabel(value),label:`${label} ${direction === "up" ? "UP" : direction === "down" ? "DOWN" : "FLAT"}`,context:"VS PRIOR 30 DAYS",direction };
+}
+
 function GradeStamp({ grade }: { grade: string }) {
   return <div className="market-grade"><span>CARD GRADE</span><strong>{grade}</strong></div>;
 }
@@ -150,25 +167,30 @@ function MarketFrontVisual({ story }: { story: MarketStory }) {
 
 function PlayerIndexFront({ story, open }: { story: MarketStory;open: () => void }) {
   const insight = story.insight;
-  const movement = insight?.averageSaleChange30d ?? 0;
-  const direction = movement > 0 ? "UP" : movement < 0 ? "DOWN" : "FLAT";
+  const feature = playerIndexFeature(story);
+  const averageSale = compactCurrency(insight?.averageSale30d ?? 0);
+  const activity = insight?.featureMetric === "sales_change"
+    ? [{ label:"TRADED VALUE",value:compactCurrency(insight?.totalValue30d ?? 0) },{ label:"AVERAGE SALE",value:averageSale }]
+    : insight?.featureMetric === "traded_value" || insight?.featureMetric === "traded_value_change"
+      ? [{ label:"AVERAGE SALE",value:averageSale },{ label:"RECORDED SALES",value:compactNumber(insight?.totalSales30d ?? 0) }]
+      : [{ label:"TRADED VALUE",value:compactCurrency(insight?.totalValue30d ?? 0) },{ label:"RECORDED SALES",value:compactNumber(insight?.totalSales30d ?? 0) }];
   return <section className="story-face market-face market-player-index player-index-front">
     <header><PulseLogo/><span className="live-pill">{marketFreshnessLabel(story)}</span></header>
     <div className="player-index-type"><b aria-hidden="true">PI</b><div><span>PLAYER INDEX</span><strong>30-DAY MARKET VIEW</strong></div></div>
     <div className="player-index-hero">
       <PlayerIndexPortrait key={story.imageUrl} story={story}/>
       <div className="player-index-hero-shade"/>
-      <div className="player-index-score-badge"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "PILOT"}</b></div>
+      <div className="player-index-score-badge"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "INDEX"}</b></div>
       <div className="player-index-hero-copy">
         <span>{story.sport} · PLAYER MARKET</span>
         <h1>{story.player}</h1>
-        <div className="player-index-move"><strong className={movement < 0 ? "down" : movement > 0 ? "up" : undefined}>{moveLabel(movement)}</strong><p>AVERAGE SALE {direction}<b>VS PRIOR 30 DAYS</b></p></div>
+        <div className="player-index-move"><strong className={feature.direction === "down" ? "down" : feature.direction === "up" ? "up" : undefined}>{feature.display}</strong><p>{feature.label}<b>{feature.context}</b></p></div>
       </div>
     </div>
     <div className="player-index-activity" aria-label="30-day Player Index activity">
-      <p><span>TRADED VALUE</span><strong>{compactCurrency(insight?.totalValue30d ?? 0)}</strong></p>
+      <p><span>{activity[0].label}</span><strong>{activity[0].value}</strong></p>
       <i/>
-      <p><span>RECORDED SALES</span><strong>{compactNumber(insight?.totalSales30d ?? 0)}</strong></p>
+      <p><span>{activity[1].label}</span><strong>{activity[1].value}</strong></p>
     </div>
     <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>VIEW FULL PLAYER INDEX</strong><b>→</b></button>
   </section>;
@@ -298,7 +320,7 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
     const averageMovement = insight?.averageSaleChange30d ?? 0;
     return <>
       <section className="player-index-detail">
-        <div className="index-score-detail"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "PILOT"}</b><small>Market activity score—not a buy or sell rating</small></div>
+        <div className="index-score-detail"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "INDEX"}</b><small>Market activity score—not a buy or sell rating</small></div>
         <div className="index-detail-metrics">
           <article><span>30D TRADED VALUE</span><strong>{currency(insight?.totalValue30d ?? 0)}</strong><small>{signedDifference(insight?.totalValueChange30d ?? 0)} vs prior 30d</small></article>
           <article><span>AVERAGE SALE</span><strong>{currency(insight?.averageSale30d ?? 0)}</strong><small className={averageMovement < 0 ? "down" : "up"}>{moveLabel(averageMovement)} vs prior 30d</small></article>

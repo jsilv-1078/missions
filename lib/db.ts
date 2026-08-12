@@ -1,12 +1,33 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { buildAutomatedMarketStories } from "./market-insights";
 import { marketHeadline } from "./market-headlines";
-import { PLAYER_INDEX_PILOTS, playerIndexPortraitUrl } from "./player-index";
+import {
+  PLAYER_INDEX_DAILY_TARGET,playerIndexPortraitUrl,type PlayerIndexRecentFeature,
+} from "./player-index";
 import type { FeedStory, MarketStory, NewArticleInput, NewsStory } from "./types";
 
 type SqlClient = NeonQueryFunction<false, false>;
 let sqlClient: SqlClient | null = null;
 let schemaReady: Promise<void> | null = null;
+
+export type PlayerIndexMarketCandidate = {
+  player: string;
+  sport: string;
+  cardCount: number;
+  sales30d: number;
+  weightedChange30d: number;
+  strongestChange30d: number;
+  updatedAt: string;
+};
+
+export type PlayerPortraitProfile = {
+  player: string;
+  sport: string;
+  imageUrl: string | null;
+  source: string;
+  available: boolean;
+  checkedAt: string;
+};
 
 function connectionString() {
   return process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.NEON_DATABASE_URL;
@@ -67,6 +88,19 @@ async function initializeSchema() {
     "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
   ].join(" "));
   await sql.query([
+    "CREATE TABLE IF NOT EXISTS player_profiles (",
+    "player_key TEXT NOT NULL, player TEXT NOT NULL, sport TEXT NOT NULL, image_url TEXT,",
+    "image_source TEXT NOT NULL DEFAULT 'unavailable', available BOOLEAN NOT NULL DEFAULT FALSE,",
+    "checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),",
+    "PRIMARY KEY(player_key,sport))",
+  ].join(" "));
+  await sql.query([
+    "CREATE TABLE IF NOT EXISTS player_index_features (",
+    "featured_on DATE NOT NULL, player_key TEXT NOT NULL, player TEXT NOT NULL, sport TEXT NOT NULL,",
+    "feature_score NUMERIC(8,2) NOT NULL DEFAULT 0, feature_metric TEXT NOT NULL, metrics JSONB NOT NULL DEFAULT '{}'::jsonb,",
+    "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(featured_on,player_key))",
+  ].join(" "));
+  await sql.query([
     "CREATE TABLE IF NOT EXISTS sync_runs (",
     "id BIGSERIAL PRIMARY KEY, source TEXT NOT NULL, status TEXT NOT NULL,",
     "records_seen INTEGER NOT NULL DEFAULT 0, records_written INTEGER NOT NULL DEFAULT 0,",
@@ -74,6 +108,7 @@ async function initializeSchema() {
   ].join(" "));
   await sql.query("CREATE INDEX IF NOT EXISTS market_stories_updated_idx ON market_stories(updated_at DESC)");
   await sql.query("CREATE INDEX IF NOT EXISTS player_indexes_updated_idx ON player_indexes(updated_at DESC)");
+  await sql.query("CREATE INDEX IF NOT EXISTS player_index_features_player_idx ON player_index_features(player_key,featured_on DESC)");
   await sql.query("ALTER TABLE market_stories ADD COLUMN IF NOT EXISTS market_meta JSONB NOT NULL DEFAULT '{}'::jsonb");
   await sql.query("CREATE INDEX IF NOT EXISTS news_stories_published_idx ON news_stories(published_at DESC)");
   await sql.query("DELETE FROM market_stories WHERE demo=TRUE");
@@ -132,6 +167,96 @@ export async function deleteMarketStoriesExcept(cardIds: string[]) {
 
 function playerKey(value: string) {
   return value.trim().toLocaleLowerCase();
+}
+
+function unambiguousPlayer(value: string) {
+  const normalized = value.trim().toLocaleLowerCase();
+  return normalized.length >= 3
+    && !/[&/]/.test(value)
+    && !/\b(and|team|checklist|unknown|multiple players)\b/.test(normalized);
+}
+
+export async function listPlayerIndexCandidates(limit = 36):Promise<PlayerIndexMarketCandidate[]> {
+  await ensureSchema();
+  const rows = await getSql().query([
+    "SELECT player,sport,COUNT(*)::int AS card_count,SUM(sales_30d)::int AS sales_30d,",
+    "CASE WHEN SUM(GREATEST(sales_30d,1)) > 0",
+    "THEN SUM(change_30d * GREATEST(sales_30d,1)) / SUM(GREATEST(sales_30d,1)) ELSE 0 END AS weighted_change_30d,",
+    "MAX(ABS(change_30d)) AS strongest_change_30d,MAX(source_updated_at) AS updated_at",
+    "FROM market_stories WHERE demo=FALSE AND sport IN ('Football','Baseball','Basketball','Hockey','Soccer')",
+    "GROUP BY player,sport ORDER BY SUM(sales_30d) DESC,MAX(ABS(change_30d)) DESC LIMIT $1",
+  ].join(" "),[Math.max(limit * 2,limit)]);
+  return rows.flatMap((row):PlayerIndexMarketCandidate[] => {
+    const player = String(row.player ?? "").trim();
+    if (!unambiguousPlayer(player)) return [];
+    return [{
+      player,sport:String(row.sport),cardCount:Number(row.card_count),sales30d:Number(row.sales_30d),
+      weightedChange30d:Number(row.weighted_change_30d),strongestChange30d:Number(row.strongest_change_30d),
+      updatedAt:new Date(String(row.updated_at)).toISOString(),
+    }];
+  }).slice(0,limit);
+}
+
+export async function getPlayerPortraitProfile(player: string,sport: string):Promise<PlayerPortraitProfile | null> {
+  await ensureSchema();
+  const rows = await getSql().query(
+    "SELECT player,sport,image_url,image_source,available,checked_at FROM player_profiles WHERE player_key=$1 AND sport=$2 LIMIT 1",
+    [playerKey(player),sport],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    player:String(row.player),sport:String(row.sport),imageUrl:row.image_url ? String(row.image_url) : null,
+    source:String(row.image_source),available:Boolean(row.available),checkedAt:new Date(String(row.checked_at)).toISOString(),
+  };
+}
+
+export async function savePlayerPortraitProfile(profile: Omit<PlayerPortraitProfile,"checkedAt">) {
+  await ensureSchema();
+  await getSql().query([
+    "INSERT INTO player_profiles(player_key,player,sport,image_url,image_source,available,checked_at,updated_at)",
+    "VALUES($1,$2,$3,$4,$5,$6,NOW(),NOW()) ON CONFLICT(player_key,sport) DO UPDATE SET",
+    "player=EXCLUDED.player,sport=EXCLUDED.sport,image_url=EXCLUDED.image_url,image_source=EXCLUDED.image_source,",
+    "available=EXCLUDED.available,checked_at=NOW(),updated_at=NOW()",
+  ].join(" "),[playerKey(profile.player),profile.player,profile.sport,profile.imageUrl,profile.source,profile.available]);
+}
+
+export async function getRecentPlayerIndexFeatures(days = 3):Promise<PlayerIndexRecentFeature[]> {
+  await ensureSchema();
+  const rows = await getSql().query([
+    "SELECT DISTINCT ON(player_key) player,featured_on,metrics FROM player_index_features",
+    "WHERE featured_on >= CURRENT_DATE - ($1::int * INTERVAL '1 day')",
+    "ORDER BY player_key,featured_on DESC",
+  ].join(" "),[Math.max(1,days)]);
+  return rows.map((row) => {
+    const metrics = row.metrics && typeof row.metrics === "object" ? row.metrics as Record<string,unknown> : {};
+    return {
+      player:String(row.player),featuredOn:new Date(String(row.featured_on)).toISOString(),
+      averageSaleChange30d:Number(metrics.averageSaleChange30d ?? 0),
+      salesChange30d:Number(metrics.salesChange30d ?? 0),
+      totalValueChange30d:Number(metrics.totalValueChange30d ?? 0),score:Number(metrics.score ?? 0),
+    };
+  });
+}
+
+export async function recordPlayerIndexFeatures(stories: MarketStory[],featuredOn = new Date().toISOString().slice(0,10)) {
+  await ensureSchema();
+  for (const story of stories) {
+    const insight = story.insight;
+    if (!insight) continue;
+    await getSql().query([
+      "INSERT INTO player_index_features(featured_on,player_key,player,sport,feature_score,feature_metric,metrics)",
+      "VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) ON CONFLICT(featured_on,player_key) DO UPDATE SET",
+      "player=EXCLUDED.player,sport=EXCLUDED.sport,feature_score=EXCLUDED.feature_score,",
+      "feature_metric=EXCLUDED.feature_metric,metrics=EXCLUDED.metrics",
+    ].join(" "),[
+      featuredOn,playerKey(story.player),story.player,story.sport,insight.featureScore ?? 0,
+      insight.featureMetric ?? "traded_value",JSON.stringify({
+        averageSaleChange30d:insight.averageSaleChange30d ?? 0,salesChange30d:insight.salesChange30d ?? 0,
+        totalValueChange30d:insight.totalValueChange30d ?? 0,score:insight.score ?? 0,
+      }),
+    ]);
+  }
 }
 
 export async function upsertPlayerIndexStory(story: MarketStory, initialize = true) {
@@ -270,11 +395,9 @@ export async function getFeedStories(limit = 30, offset = 0): Promise<FeedStory[
   try {
     await ensureSchema();
     const fetchLimit = Math.min(120,Math.max(1,offset + limit));
-    const pilotPlayerKeys = PLAYER_INDEX_PILOTS.map((pilot) => playerKey(pilot.player));
-    const pilotPlaceholders = pilotPlayerKeys.map((_,index) => "$" + (index + 1)).join(",");
     const [markets, playerIndexes, news] = await Promise.all([
       getSql().query("SELECT * FROM market_stories ORDER BY updated_at DESC LIMIT $1", [fetchLimit]),
-      getSql().query("SELECT * FROM player_indexes WHERE player_key IN (" + pilotPlaceholders + ") ORDER BY updated_at DESC",pilotPlayerKeys),
+      getSql().query("SELECT * FROM player_indexes ORDER BY updated_at DESC LIMIT $1",[PLAYER_INDEX_DAILY_TARGET]),
       getSql().query("SELECT * FROM news_stories WHERE status='published' ORDER BY published_at DESC LIMIT $1", [fetchLimit]),
     ]);
     const playerIndexStories = playerIndexes.flatMap((row) => {
@@ -379,13 +502,20 @@ export async function databaseHealth() {
   if (!databaseConfigured()) return { configured:false, connected:false };
   try {
     await ensureSchema();
-    const [rows,indexRows] = await Promise.all([
+    const [rows,indexRows,featureRows] = await Promise.all([
       getSql().query("SELECT NOW() AS now"),
       getSql().query("SELECT COUNT(*)::int AS count,MAX(source_updated_at) AS latest FROM player_indexes"),
+      getSql().query([
+        "SELECT featured_on,COUNT(*)::int AS count FROM player_index_features",
+        "WHERE featured_on=(SELECT MAX(featured_on) FROM player_index_features) GROUP BY featured_on",
+      ].join(" ")),
     ]);
     return {
       configured:true,connected:true,serverTime:rows[0].now,
       playerIndexes:{ count:Number(indexRows[0]?.count ?? 0),latest:indexRows[0]?.latest ?? null },
+      playerIndexSelection:{
+        featuredOn:featureRows[0]?.featured_on ?? null,count:Number(featureRows[0]?.count ?? 0),
+      },
     };
   } catch (error) {
     return { configured:true, connected:false, error:error instanceof Error ? error.message : "Unknown database error" };

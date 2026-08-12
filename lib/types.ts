@@ -14,6 +14,12 @@ export type MarketStoryKind =
 
 export type MarketGradePrice = { grade: string; price: number };
 export type MarketSale = { date: string; price: number; venue?: string };
+export type PlayerIndexFeatureMetric =
+  | "average_sale_change"
+  | "sales_change"
+  | "traded_value_change"
+  | "market_breadth"
+  | "traded_value";
 
 export type MarketInsightItem = {
   id: string;
@@ -49,6 +55,12 @@ export type MarketInsight = {
   coverageDays?: number;
   score?: number;
   scoreLabel?: string;
+  featureMetric?: PlayerIndexFeatureMetric;
+  featureValue?: number;
+  featureLabel?: string;
+  featureDirection?: "up" | "down" | "neutral";
+  featureScore?: number;
+  selectionReason?: string;
   scoreBreakdown?: {
     liquidity: number;
     momentum: number;

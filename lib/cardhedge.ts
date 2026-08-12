@@ -1,9 +1,15 @@
 import {
   beginSync,deleteMarketStoriesExcept,deletePlayerIndexesExcept,finishSync,updateSyncProgress,
-  upsertMarketStory,upsertPlayerIndexStory,
+  getRecentPlayerIndexFeatures,listPlayerIndexCandidates,recordPlayerIndexFeatures,
+  upsertMarketStory,upsertPlayerIndexStory,type PlayerIndexMarketCandidate,
 } from "./db";
 import { marketHeadline } from "./market-headlines";
-import { buildPlayerIndexStory, PLAYER_INDEX_PILOTS, type PlayerIndexCard, type PlayerSalesBucket } from "./player-index";
+import {
+  buildPlayerIndexStory,PLAYER_INDEX_COOLDOWN_DAYS,PLAYER_INDEX_DAILY_MINIMUM,PLAYER_INDEX_DAILY_TARGET,
+  selectFeaturedPlayerIndexes,summarizePlayerSales,type PlayerIndexCard,type PlayerIndexRecentFeature,
+  type PlayerSalesBucket,
+} from "./player-index";
+import { resolvePlayerPortrait } from "./player-portraits";
 import type { MarketGradePrice, MarketSale, MarketStory, MarketStoryKind } from "./types";
 
 type CardSearchItem = {
@@ -67,6 +73,9 @@ const MAX_PUBLISHED_STORIES = Object.values(CATEGORY_TARGETS).reduce((sum,target
 const MAX_DISCOVERY_CARDS_PER_PLAYER = 2;
 const MAX_PUBLISHED_STORIES_PER_PLAYER = 2;
 const ENRICH_CONCURRENCY = 8;
+const PLAYER_INDEX_CANDIDATE_LIMIT = 36;
+const PLAYER_INDEX_FINALIST_LIMIT = 16;
+const PLAYER_INDEX_SEARCH_CONCURRENCY = 4;
 const MIN_30_DAY_SALES = 5;
 const MIN_VINTAGE_30_DAY_SALES = 3;
 const MAX_ABS_CHANGE_7D = 200;
@@ -226,62 +235,124 @@ function playerSalesBuckets(value: PlayerSalesStatsResult) {
   });
 }
 
+function recentFeatureAgeDays(feature: PlayerIndexRecentFeature,now: string) {
+  const age = Date.parse(now) - Date.parse(feature.featuredOn);
+  return Number.isFinite(age) ? Math.floor(age / 86_400_000) : Number.POSITIVE_INFINITY;
+}
+
+function playerIndexCandidateScore(
+  candidate: PlayerIndexMarketCandidate,
+  buckets: PlayerSalesBucket[],
+  recent: PlayerIndexRecentFeature | undefined,
+  now: string,
+) {
+  const summary = summarizePlayerSales(buckets);
+  if (!summary) return Number.NEGATIVE_INFINITY;
+  if (recent && recentFeatureAgeDays(recent,now) < PLAYER_INDEX_COOLDOWN_DAYS) {
+    const changed = Math.abs(summary.averageSaleChange30d - recent.averageSaleChange30d) >= 5
+      || Math.abs(summary.salesChange30d - recent.salesChange30d) >= 25
+      || Math.abs(summary.totalValueChange30d - recent.totalValueChange30d) >= 25;
+    if (!changed) return Number.NEGATIVE_INFINITY;
+  }
+  const liquidity = Math.log10(summary.current.count + 1) * 18;
+  const averageSignal = Math.min(Math.abs(summary.averageSaleChange30d),60) * .9;
+  const salesSignal = Math.min(Math.abs(summary.salesChange30d),100) * .45;
+  const valueSignal = Math.min(Math.abs(summary.totalValueChange30d),100) * .35;
+  const cardSignal = Math.min(Math.abs(candidate.weightedChange30d),50) * .4
+    + Math.min(Math.abs(candidate.strongestChange30d),100) * .1;
+  return liquidity + averageSignal + salesSignal + valueSignal + cardSignal;
+}
+
 export async function syncPlayerIndexes() {
-  const players = PLAYER_INDEX_PILOTS.map((pilot) => pilot.player);
+  const now = new Date().toISOString();
   const errors:string[] = [];
+  const rejections:string[] = [];
   try {
-    const results = await Promise.all(PLAYER_INDEX_PILOTS.map(async (pilot) => {
-      const [statsResult,searchResult] = await Promise.allSettled([
-        cardHedgeFetch<PlayerSalesStatsResponse>("/v1/cards/sales-stats-by-player",{
-          players:[pilot.player],interval:"day",periods:60,include_current:false,
-        }),
+    const [candidates,recentFeatures] = await Promise.all([
+      listPlayerIndexCandidates(PLAYER_INDEX_CANDIDATE_LIMIT),
+      getRecentPlayerIndexFeatures(PLAYER_INDEX_COOLDOWN_DAYS),
+    ]);
+    if (!candidates.length) {
+      return {
+        requested:PLAYER_INDEX_DAILY_TARGET,candidateCount:0,finalistCount:0,built:0,written:0,
+        publishedPlayers:[] as string[],errors:["No verified player candidates were available after market sync"],rejections,
+      };
+    }
+    const statsPayload = await cardHedgeFetch<PlayerSalesStatsResponse>("/v1/cards/sales-stats-by-player",{
+      players:candidates.map((candidate) => candidate.player),interval:"day",periods:60,include_current:false,
+    });
+    const statsByPlayer = new Map((statsPayload.results ?? []).map((result) => [normalized(result.player),result]));
+    const recentByPlayer = new Map(recentFeatures.map((feature) => [normalized(feature.player),feature]));
+    const finalists = candidates.flatMap((candidate) => {
+      const stats = statsByPlayer.get(normalized(candidate.player));
+      if (!stats) {
+        rejections.push(`${candidate.player}: no 60-day player statistics returned`);
+        return [];
+      }
+      const buckets = playerSalesBuckets(stats);
+      const score = playerIndexCandidateScore(candidate,buckets,recentByPlayer.get(normalized(candidate.player)),now);
+      if (!Number.isFinite(score)) {
+        rejections.push(`${candidate.player}: held by the three-day rotation or insufficient sales coverage`);
+        return [];
+      }
+      return [{ candidate,buckets,score }];
+    }).sort((first,second) => second.score - first.score).slice(0,PLAYER_INDEX_FINALIST_LIMIT);
+
+    const built = await mapWithConcurrency(finalists,PLAYER_INDEX_SEARCH_CONCURRENCY,async (finalist) => {
+      const { candidate,buckets } = finalist;
+      const [portraitResult,searchResult] = await Promise.allSettled([
+        resolvePlayerPortrait(candidate.player,candidate.sport),
         cardHedgeFetch<PlayerCardSearchResponse>("/v1/cards/search-cards-wsort",{
-          player:pilot.player,category:pilot.sport,page:1,page_size:100,
+          player:candidate.player,category:candidate.sport,page:1,page_size:100,
           sort_by:"sales_30day",sort_order:"desc",
         }),
       ]);
-      if (statsResult.status === "rejected") {
-        errors.push(`${pilot.player}: ${statsResult.reason instanceof Error ? statsResult.reason.message : "player sales request failed"}`);
+      if (portraitResult.status === "rejected") {
+        errors.push(`${candidate.player}: ${portraitResult.reason instanceof Error ? portraitResult.reason.message : "portrait request failed"}`);
       }
       if (searchResult.status === "rejected") {
-        errors.push(`${pilot.player}: ${searchResult.reason instanceof Error ? searchResult.reason.message : "card search failed"}`);
+        errors.push(`${candidate.player}: ${searchResult.reason instanceof Error ? searchResult.reason.message : "card search failed"}`);
       }
-      return {
-        stats:statsResult.status === "fulfilled" ? statsResult.value : null,
-        search:searchResult.status === "fulfilled" ? searchResult.value : { cards:[],count:0,pages:0 },
-      };
-    }));
-    let written = 0;
-    const publishedPlayers:string[] = [];
-    for (let index = 0; index < PLAYER_INDEX_PILOTS.length; index += 1) {
-      const pilot = PLAYER_INDEX_PILOTS[index];
-      const statsResult = results[index].stats?.results?.find((result) => normalized(result.player) === normalized(pilot.player));
-      const search = results[index].search;
-      if (!statsResult) {
-        if (results[index].stats) errors.push(`${pilot.player}: no player sales statistics returned`);
-        continue;
+      const portrait = portraitResult.status === "fulfilled" ? portraitResult.value : null;
+      const search = searchResult.status === "fulfilled" ? searchResult.value : { cards:[],count:0,pages:0 };
+      if (!portrait) {
+        rejections.push(`${candidate.player}: no exact approved player portrait`);
+        return null;
       }
       const cards = (search.cards ?? []).flatMap((card) => {
-        const parsed = playerIndexCard(card,pilot.player);
+        const parsed = playerIndexCard(card,candidate.player);
         return parsed ? [parsed] : [];
       });
       const story = buildPlayerIndexStory({
-        player:pilot.player,sport:pilot.sport,playerImageUrl:pilot.imageUrl,buckets:playerSalesBuckets(statsResult),cards,
-        catalogMatches:Number(search.count ?? search.cards?.length ?? 0),updatedAt:new Date().toISOString(),
+        player:candidate.player,sport:candidate.sport,playerImageUrl:portrait.imageUrl,buckets,cards,
+        catalogMatches:Number(search.count ?? search.cards?.length ?? 0),updatedAt:now,
       });
-      if (!story) {
-        errors.push(`${pilot.player}: insufficient 60-day sales coverage or active card breadth`);
-        continue;
-      }
-      await upsertPlayerIndexStory(story,false);
-      written += 1;
-      publishedPlayers.push(pilot.player);
+      if (!story) rejections.push(`${candidate.player}: insufficient active-card breadth after quality checks`);
+      return story;
+    });
+    const qualifiedStories = built.filter((story):story is MarketStory => Boolean(story));
+    const selected = selectFeaturedPlayerIndexes(qualifiedStories,recentFeatures,{ target:PLAYER_INDEX_DAILY_TARGET,now });
+    if (selected.length < PLAYER_INDEX_DAILY_MINIMUM) {
+      errors.push(`Only ${selected.length} qualified rotating indexes were available; keeping the prior active lineup`);
+      return {
+        requested:PLAYER_INDEX_DAILY_TARGET,candidateCount:candidates.length,finalistCount:finalists.length,
+        built:qualifiedStories.length,written:0,publishedPlayers:[] as string[],errors,rejections,
+      };
     }
-    if (written > 0) await deletePlayerIndexesExcept(players);
-    return { requested:players.length,written,publishedPlayers,errors };
+    for (const story of selected) await upsertPlayerIndexStory(story,false);
+    await deletePlayerIndexesExcept(selected.map((story) => story.player));
+    await recordPlayerIndexFeatures(selected);
+    return {
+      requested:PLAYER_INDEX_DAILY_TARGET,candidateCount:candidates.length,finalistCount:finalists.length,
+      built:qualifiedStories.length,written:selected.length,publishedPlayers:selected.map((story) => story.player),
+      errors,rejections,
+    };
   } catch (error) {
     errors.push(error instanceof Error ? error.message : "player sales request failed");
-    return { requested:players.length,written:0,publishedPlayers:[] as string[],errors };
+    return {
+      requested:PLAYER_INDEX_DAILY_TARGET,candidateCount:0,finalistCount:0,built:0,written:0,
+      publishedPlayers:[] as string[],errors,rejections,
+    };
   }
 }
 
@@ -811,13 +882,13 @@ export async function syncMarketData() {
   let written = 0;
   try {
     await reportSyncStage(runId,"discovery","Searching for modern cards, grading premiums and verified vintage years…");
-    const [discovery,playerIndexes] = await Promise.all([discoverCandidates(),syncPlayerIndexes()]);
+    const discovery = await discoverCandidates();
     const candidates = discovery.candidates;
     seen = candidates.length;
     await reportSyncStage(
       runId,"valuation",
       "Confirmed " + candidates.length + " candidates, including " + discovery.stats.selectedVintageCards + " vintage. Checking grades and valuations…",
-      candidates.length,0,{ ...discovery.stats,playerIndexes },
+      candidates.length,0,discovery.stats,
     );
     const enriched = await mapWithConcurrency(candidates,ENRICH_CONCURRENCY,enrichCandidate);
     const qualified = enriched.flatMap((item) => item.facts ? [item.facts] : []);
@@ -872,22 +943,17 @@ export async function syncMarketData() {
       deleted,reasonCounts,typeCounts,categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,
       vintageGradeCounts,uniquePlayers:Object.keys(playerStoryCounts).length,
       repeatedPlayers:Object.fromEntries(Object.entries(playerStoryCounts).filter(([,count]) => count > 1)),
-      discovery:discovery.stats,playerIndexes,
+      discovery:discovery.stats,
     }));
     const categorySummary = (Object.keys(CATEGORY_TARGETS) as TargetCategory[])
       .map((category) => category + " " + (categoryCounts[category] ?? 0) + "/" + CATEGORY_TARGETS[category])
       .join(" · ");
-    const playerIndexComplete = playerIndexes.written === playerIndexes.requested && playerIndexes.errors.length === 0;
-    const syncStatus = playerIndexComplete ? "success" : "partial";
-    const playerIndexSummary = `Player Index ${playerIndexes.written}/${playerIndexes.requested}`
-      + (playerIndexes.errors.length ? ` (${playerIndexes.errors.join("; ")})` : "");
-    const message = (playerIndexComplete ? "Market sync completed: " : "Market sync partially completed: ")
-      + stories.length + " published, " + rejected.length + " rejected, " + deleted
-      + " stale removed. " + playerIndexSummary + ". Mix: " + categorySummary;
-    await finishSync(runId,syncStatus,candidates.length,stories.length,message);
+    const message = "Market sync completed: " + stories.length + " published, " + rejected.length + " rejected, "
+      + deleted + " stale removed. Player Index selection follows in the daily rotation job. Mix: " + categorySummary;
+    await finishSync(runId,"success",candidates.length,stories.length,message);
     return {
-      status:syncStatus,seen:candidates.length,written:stories.length,rejected:rejected.length,deleted,message,
-      categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,playerIndexes,
+      status:"success",seen:candidates.length,written:stories.length,rejected:rejected.length,deleted,message,
+      categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown market sync error";
