@@ -111,7 +111,25 @@ async function cardHedgeFetch<T>(path: string, body?: unknown): Promise<T> {
     signal: AbortSignal.timeout(20000),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error("Market data provider " + path + " returned " + response.status);
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const payload = await response.json() as Record<string,unknown>;
+      const value = payload.detail ?? payload.error ?? payload.message;
+      const messages = Array.isArray(value)
+        ? value.map((item) => {
+          if (!item || typeof item !== "object") return String(item);
+          const issue = item as Record<string,unknown>;
+          const location = Array.isArray(issue.loc) ? issue.loc.join(".") : "request";
+          return `${location}: ${String(issue.msg ?? issue.message ?? "invalid value")}`;
+        })
+        : [typeof value === "string" ? value : ""];
+      detail = messages.filter(Boolean).join("; ").replace(/\s+/g," ").slice(0,500);
+    } catch {
+      // Status and endpoint still provide a safe diagnostic if the provider body is not JSON.
+    }
+    throw new Error("Market data provider " + path + " returned " + response.status + (detail ? ": " + detail : ""));
+  }
   return response.json() as Promise<T>;
 }
 
@@ -212,30 +230,35 @@ async function syncPlayerIndexes() {
   const players = PLAYER_INDEX_PILOTS.map((pilot) => pilot.player);
   const errors:string[] = [];
   try {
-    const [stats,searches] = await Promise.all([
-      cardHedgeFetch<PlayerSalesStatsResponse>("/v1/cards/sales-stats-by-player",{
-        players,interval:"day",periods:60,include_current:false,
-      }),
-      Promise.all(PLAYER_INDEX_PILOTS.map(async (pilot) => {
-        try {
-          return await cardHedgeFetch<PlayerCardSearchResponse>("/v1/cards/search-cards-wsort",{
-            player:pilot.player,category:pilot.sport,page:1,page_size:100,
-            sort_by:"sales_30day",sort_order:"desc",
-          });
-        } catch (error) {
-          errors.push(`${pilot.player}: ${error instanceof Error ? error.message : "card search failed"}`);
-          return { cards:[],count:0,pages:0 };
-        }
-      })),
-    ]);
+    const results = await Promise.all(PLAYER_INDEX_PILOTS.map(async (pilot) => {
+      const [statsResult,searchResult] = await Promise.allSettled([
+        cardHedgeFetch<PlayerSalesStatsResponse>("/v1/cards/sales-stats-by-player",{
+          players:[pilot.player],interval:"day",periods:60,include_current:false,
+        }),
+        cardHedgeFetch<PlayerCardSearchResponse>("/v1/cards/search-cards-wsort",{
+          player:pilot.player,category:pilot.sport,page:1,page_size:100,
+          sort_by:"sales_30day",sort_order:"desc",
+        }),
+      ]);
+      if (statsResult.status === "rejected") {
+        errors.push(`${pilot.player}: ${statsResult.reason instanceof Error ? statsResult.reason.message : "player sales request failed"}`);
+      }
+      if (searchResult.status === "rejected") {
+        errors.push(`${pilot.player}: ${searchResult.reason instanceof Error ? searchResult.reason.message : "card search failed"}`);
+      }
+      return {
+        stats:statsResult.status === "fulfilled" ? statsResult.value : null,
+        search:searchResult.status === "fulfilled" ? searchResult.value : { cards:[],count:0,pages:0 },
+      };
+    }));
     let written = 0;
     const publishedPlayers:string[] = [];
     for (let index = 0; index < PLAYER_INDEX_PILOTS.length; index += 1) {
       const pilot = PLAYER_INDEX_PILOTS[index];
-      const statsResult = stats.results?.find((result) => normalized(result.player) === normalized(pilot.player));
-      const search = searches[index];
+      const statsResult = results[index].stats?.results?.find((result) => normalized(result.player) === normalized(pilot.player));
+      const search = results[index].search;
       if (!statsResult) {
-        errors.push(`${pilot.player}: no player sales statistics returned`);
+        if (results[index].stats) errors.push(`${pilot.player}: no player sales statistics returned`);
         continue;
       }
       const cards = (search.cards ?? []).flatMap((card) => {
@@ -854,13 +877,16 @@ export async function syncMarketData() {
     const categorySummary = (Object.keys(CATEGORY_TARGETS) as TargetCategory[])
       .map((category) => category + " " + (categoryCounts[category] ?? 0) + "/" + CATEGORY_TARGETS[category])
       .join(" · ");
+    const playerIndexComplete = playerIndexes.written === playerIndexes.requested && playerIndexes.errors.length === 0;
+    const syncStatus = playerIndexComplete ? "success" : "partial";
     const playerIndexSummary = `Player Index ${playerIndexes.written}/${playerIndexes.requested}`
       + (playerIndexes.errors.length ? ` (${playerIndexes.errors.join("; ")})` : "");
-    const message = "Market sync completed: " + stories.length + " published, " + rejected.length + " rejected, " + deleted
+    const message = (playerIndexComplete ? "Market sync completed: " : "Market sync partially completed: ")
+      + stories.length + " published, " + rejected.length + " rejected, " + deleted
       + " stale removed. " + playerIndexSummary + ". Mix: " + categorySummary;
-    await finishSync(runId,"success",candidates.length,stories.length,message);
+    await finishSync(runId,syncStatus,candidates.length,stories.length,message);
     return {
-      status:"success",seen:candidates.length,written:stories.length,rejected:rejected.length,deleted,message,
+      status:syncStatus,seen:candidates.length,written:stories.length,rejected:rejected.length,deleted,message,
       categoryTargets:CATEGORY_TARGETS,categoryCounts,categoryShortfalls,playerIndexes,
     };
   } catch (error) {
