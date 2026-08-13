@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { cardNumberLabel } from "@/lib/card-number";
 import { playerPreferenceKey, RECENT_CARD_COOLDOWN_MS, remixFeedStories, storyCardKeys } from "@/lib/feed-order";
 import { storyRequiresCurrentValueDirection, valueDirectionIsCurrent } from "@/lib/market-freshness";
 import type { FeedStory, MarketInsightItem, MarketStory, MarketStoryKind, NewsStory } from "@/lib/types";
@@ -260,14 +261,12 @@ function MarketFront({ story, open,preferenceControls }: { story: MarketStory; o
   if (story.storyKind === "player_index") return <PlayerIndexFront story={story} open={open} preferenceControls={preferenceControls}/>;
   const format = marketFormat(story);
   const styleClass = kindClass(story.storyKind);
-  const showCardTitle = !["player_index","player_snapshot","market_matchup"].includes(story.storyKind);
   return <section className={"story-face market-face " + styleClass}>
     <header><PulseLogo/><span className="live-pill" title={marketFreshnessDescription(story)} aria-label={marketFreshnessDescription(story)}>{marketFreshnessLabel(story)}</span></header>
     <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div className="type-copy"><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
     <h1>{story.headline}</h1>
     {preferenceControls}
     <MarketFrontVisual story={story}/>
-    {showCardTitle ? <p className="market-card-title">{story.cardTitle}</p> : null}
     <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>{format.cue}</strong><b>→</b></button>
   </section>;
 }
@@ -368,8 +367,17 @@ function CollectorEvidence({ story,previous }: { story: MarketStory;previous?: S
 function InsightMarketRows({ label, items,cardLevelSales = false }: { label:string; items:MarketInsightItem[];cardLevelSales?:boolean }) {
   if (!items.length) return null;
   return <section className="insight-market-list"><header>{label}</header>{items.map((market) => <article key={market.id}>
-    <InsightImage insight={market}/><div><strong>{market.player}</strong><span>{market.cardTitle}</span><small>{market.grade}{cardLevelSales ? " representative price" : ""} · {market.sales30d.toLocaleString()} {cardLevelSales ? "card-level " : ""}sales</small></div><aside><b>{currency(market.currentValue)}</b><em className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</em></aside>
+    <InsightImage insight={market}/><div><strong>{market.player}</strong><span>{market.cardTitle}</span>{cardNumberLabel(market.cardNumber) ? <small className="insight-card-number">{cardNumberLabel(market.cardNumber)}</small> : null}<small>{market.grade}{cardLevelSales ? " representative price" : ""} · {market.sales30d.toLocaleString()} {cardLevelSales ? "card-level " : ""}sales</small></div><aside><b>{currency(market.currentValue)}</b><em className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</em></aside>
   </article>)}</section>;
+}
+
+function MarketCardIdentity({ story }: { story: MarketStory }) {
+  const number = cardNumberLabel(story.cardNumber);
+  return <section className="market-card-identity" aria-label="Card identity">
+    <span>CARD DETAILS</span>
+    <h1>{story.cardTitle}</h1>
+    <div><b>{story.grade}</b>{number ? <b className="card-number">{number}</b> : null}</div>
+  </section>;
 }
 
 function MarketDetailLead({ story }: { story: MarketStory }) {
@@ -398,7 +406,7 @@ function MarketDetailLead({ story }: { story: MarketStory }) {
     return <><div className="player-detail-summary"><span>PLAYER MARKET SNAPSHOT</span><strong className={average < 0 ? "down" : "up"}>{moveLabel(average)}</strong><b>WEIGHTED 30-DAY DIRECTION</b><div><p><small>TRACKED CARDS</small><b>{story.insight?.cardsTracked ?? 0}</b></p><p><small>RECORDED SALES</small><b>{story.insight?.totalSales30d?.toLocaleString() ?? 0}</b></p></div></div><InsightMarketRows label="CARDS IN THIS SNAPSHOT" items={story.insight?.items ?? []}/></>;
   }
   if (story.storyKind === "price_volume") return <div className="signal-detail"><span>PRICE + VOLUME SIGNAL</span><b>{story.insight?.label ?? "MARKET SIGNAL"}</b><strong className={negative ? "down" : "up"}>{moveLabel(story.change30d)}</strong><div><p><small>30-DAY SALES</small><b>{story.sales30d.toLocaleString()}</b></p><p><small>VOLUME RANK</small><b>{story.insight?.volumePercentile ?? 0}TH %ILE</b></p></div></div>;
-  if (story.storyKind === "market_matchup") return <><div className="matchup-detail"><span>HEAD-TO-HEAD MARKET</span>{(story.insight?.items ?? []).slice(0,2).map((market,index) => <article key={market.id}><InsightImage insight={market}/><div><small>{index === 0 ? "MARKET A" : "MARKET B"}</small><strong>{market.player}</strong><span>{market.cardTitle}</span><p><b>{market.grade}</b><b>{currency(market.currentValue)}</b><b className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</b><b>{market.sales30d} sales</b></p></div>{index === 0 ? <i>VS</i> : null}</article>)}</div></>;
+  if (story.storyKind === "market_matchup") return <><div className="matchup-detail"><span>HEAD-TO-HEAD MARKET</span>{(story.insight?.items ?? []).slice(0,2).map((market,index) => <article key={market.id}><InsightImage insight={market}/><div><small>{index === 0 ? "MARKET A" : "MARKET B"}</small><strong>{market.player}</strong><span>{market.cardTitle}</span>{cardNumberLabel(market.cardNumber) ? <small className="matchup-card-number">{cardNumberLabel(market.cardNumber)}</small> : null}<p><b>{market.grade}</b><b>{currency(market.currentValue)}</b><b className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</b><b>{market.sales30d} sales</b></p></div>{index === 0 ? <i>VS</i> : null}</article>)}</div></>;
   if (story.storyKind === "high_sales_30d") {
     const recentShare = story.sales30d ? Math.round((story.sales7d / story.sales30d) * 100) : 0;
     return <><div className="volume-detail"><span>CARD-WIDE SALES · ALL GRADES</span><strong>{story.sales30d.toLocaleString()}</strong><b>{story.sales7d} card-wide sales in the last 7 days</b><small>{recentShare}% of all-grade monthly sales occurred this week</small></div><MetricGrid story={story}/></>;
@@ -429,6 +437,7 @@ function MarketDetail({ story, close,previous }: { story: MarketStory; close: ()
   return <section className={"detail-face market-detail " + kindClass(story.storyKind)}>
     <header className="detail-header"><button onClick={close} aria-label="Return to story">←</button><div><span>{format.label}</span><strong>{story.player}</strong></div><b>{format.icon}</b></header>
     <div className="detail-scroll">
+      {!combinedMarket ? <MarketCardIdentity story={story}/> : null}
       <MarketDetailLead story={story}/>
       {!combinedMarket ? <CollectorEvidence story={story} previous={previous}/> : null}
       <div className="why"><span>COLLECTOR TAKEAWAY</span><p>{story.summary}</p></div>

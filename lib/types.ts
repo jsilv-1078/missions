@@ -26,6 +26,7 @@ export type MarketInsightItem = {
   player: string;
   sport: string;
   cardTitle: string;
+  cardNumber?: string;
   imageUrl: string;
   grade: string;
   currentValue: number;
@@ -81,6 +82,7 @@ export type MarketStory = {
   summary: string;
   cardId: string;
   cardTitle: string;
+  cardNumber?: string;
   imageUrl: string;
   grade: string;
   currentValue: number;

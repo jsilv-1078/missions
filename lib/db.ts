@@ -1,5 +1,6 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { buildAutomatedMarketStories } from "./market-insights";
+import { normalizeCardNumber } from "./card-number";
 import { storyRequiresCurrentValueDirection, valueDirectionIsCurrent } from "./market-freshness";
 import { marketHeadline } from "./market-headlines";
 import {
@@ -148,7 +149,7 @@ export async function upsertMarketStory(story: MarketStory, initialize = true) {
     story.sales7d, story.sales30d, story.confidenceGrade, story.freshnessDays, JSON.stringify(story.chart),
     JSON.stringify(story.comps), JSON.stringify({
       rookie:story.rookie, gradePrices:story.gradePrices, gradeGapMultiple:story.gradeGapMultiple,
-      cardYear:story.cardYear,
+      cardYear:story.cardYear, cardNumber:story.cardNumber,
       salesPaceMultiple:story.salesPaceMultiple, previous23DaySales:story.previous23DaySales,
       recentSale:story.recentSale,
     }), story.updatedAt, story.demo,
@@ -326,7 +327,8 @@ function marketRow(row: Record<string, unknown>, variant = 0): MarketStory {
     id:String(row.id), type:"market", storyKind,
     player:String(row.player), sport:String(row.sport), headline,
     summary:marketSummary(row,storyKind,freshnessDays),
-    cardId:String(row.card_id), cardTitle:String(row.card_title), imageUrl:String(row.image_url), grade:String(row.grade),
+    cardId:String(row.card_id), cardTitle:String(row.card_title), cardNumber:normalizeCardNumber(meta.cardNumber),
+    imageUrl:String(row.image_url), grade:String(row.grade),
     currentValue:Number(row.current_value), change7d:Number(row.change_7d), change30d:Number(row.change_30d),
     sales7d:Number(row.sales_7d), sales30d:Number(row.sales_30d), confidenceGrade:String(row.confidence_grade),
     freshnessDays, chart:Array.isArray(row.chart) ? row.chart.map(Number) : [],

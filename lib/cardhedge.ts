@@ -5,6 +5,7 @@ import {
 } from "./db";
 import { marketHeadline } from "./market-headlines";
 import { storyRequiresCurrentValueDirection, valueDirectionIsCurrent } from "./market-freshness";
+import { normalizeCardNumber } from "./card-number";
 import {
   buildPlayerIndexStory,PLAYER_INDEX_COOLDOWN_DAYS,PLAYER_INDEX_DAILY_MINIMUM,PLAYER_INDEX_DAILY_TARGET,
   selectFeaturedPlayerIndexes,summarizePlayerSales,type PlayerIndexCard,type PlayerIndexRecentFeature,
@@ -18,7 +19,7 @@ type CardSearchItem = {
   description: string;
   player: string;
   set: string;
-  number: string;
+  number?: string | number;
   variant: string;
   image: string;
   category: string;
@@ -223,7 +224,8 @@ function playerIndexCard(card: CardSearchItem,player: string):PlayerIndexCard | 
   if (!Number.isFinite(sales30d) || sales30d <= 0) return null;
   if (!Number.isFinite(change30d) || Math.abs(change30d) > MAX_ABS_CHANGE_30D) return null;
   return {
-    id:card.card_id,player,sport:displayCategory(card.category),cardTitle:card.description,imageUrl,
+    id:card.card_id,player,sport:displayCategory(card.category),cardTitle:card.description,
+    cardNumber:normalizeCardNumber(card.number),imageUrl,
     grade:selected.grade,currentValue:selected.price,change30d,sales30d,
   };
 }
@@ -573,7 +575,8 @@ async function enrichCandidate(card: Candidate) {
 
   return { facts:{
     player:card.player || "Unknown player", sport:displayCategory(card.category || "Sports Cards"),
-    cardId:card.card_id, cardTitle:card.description, imageUrl, grade, currentValue, change7d, change30d,
+    cardId:card.card_id, cardTitle:card.description, cardNumber:normalizeCardNumber(card.number), imageUrl,
+    grade, currentValue, change7d, change30d,
     sales7d, sales30d, confidenceGrade, freshnessDays, chart, comps, rookie:Boolean(card.rookie), cardYear:year,
     gradePrices:gap.prices, gradeGapMultiple:gap.multiple,
     salesPaceMultiple:Number.isFinite(salesPaceMultiple) ? salesPaceMultiple : 0,

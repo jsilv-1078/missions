@@ -20,6 +20,7 @@ function item(story: MarketStory): MarketInsightItem {
     player:story.player,
     sport:story.sport,
     cardTitle:story.cardTitle,
+    cardNumber:story.cardNumber,
     imageUrl:story.imageUrl,
     grade:story.grade,
     currentValue:story.currentValue,
