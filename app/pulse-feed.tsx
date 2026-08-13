@@ -30,12 +30,13 @@ function PreferenceControls({ player,preferences,onChange }: {
   const key = playerPreferenceKey(player);
   const followed = preferences.followed.includes(key);
   const less = preferences.less.includes(key);
-  return <div className="story-preferences" aria-label={`Feed preferences for ${player}`} onTouchStart={(event) => event.stopPropagation()} onTouchEnd={(event) => event.stopPropagation()}>
+  return <div className="story-preferences" aria-label={`Story frequency for ${player}`} onTouchStart={(event) => event.stopPropagation()} onTouchEnd={(event) => event.stopPropagation()}>
+    <div className="story-preference-subject"><span>STORIES ABOUT</span><strong>{player}</strong></div>
     <button className={followed ? "preference-button follow active" : "preference-button follow"} type="button" aria-label={followed ? `Remove show more for ${player}` : `Show more of ${player}`} aria-pressed={followed} title={followed ? `Showing more of ${player}` : `Show more of ${player}`} onClick={() => onChange(player,"follow")}>
-      <ShowMoreIcon/>
+      <ShowMoreIcon/><span>MORE</span>
     </button>
     <button className={less ? "preference-button less active" : "preference-button less"} type="button" aria-label={less ? `Remove show less for ${player}` : `Show less of ${player}`} aria-pressed={less} title={less ? `Showing less of ${player}` : `Show less of ${player}`} onClick={() => onChange(player,"less")}>
-      <ShowLessIcon/>
+      <ShowLessIcon/><span>LESS</span>
     </button>
   </div>;
 }
@@ -234,7 +235,8 @@ function PlayerIndexFront({ story, open,preferenceControls }: { story: MarketSto
       : [{ label:"TRADED VALUE",value:compactCurrency(insight?.totalValue30d ?? 0) },{ label:"RECORDED SALES",value:compactNumber(insight?.totalSales30d ?? 0) }];
   return <section className="story-face market-face market-player-index player-index-front">
     <header><PulseLogo/><span className="live-pill" title={marketFreshnessDescription(story)} aria-label={marketFreshnessDescription(story)}>{marketFreshnessLabel(story)}</span></header>
-    <div className="player-index-type"><b aria-hidden="true">PI</b><div className="type-copy"><span>PLAYER INDEX</span><strong>30-DAY MARKET VIEW</strong></div>{preferenceControls}</div>
+    <div className="player-index-type"><b aria-hidden="true">PI</b><div className="type-copy"><span>PLAYER INDEX</span><strong>30-DAY MARKET VIEW</strong></div></div>
+    {preferenceControls}
     <div className="player-index-hero">
       <PlayerIndexPortrait key={story.imageUrl} story={story}/>
       <div className="player-index-hero-shade"/>
@@ -261,8 +263,9 @@ function MarketFront({ story, open,preferenceControls }: { story: MarketStory; o
   const showCardTitle = !["player_index","player_snapshot","market_matchup"].includes(story.storyKind);
   return <section className={"story-face market-face " + styleClass}>
     <header><PulseLogo/><span className="live-pill" title={marketFreshnessDescription(story)} aria-label={marketFreshnessDescription(story)}>{marketFreshnessLabel(story)}</span></header>
-    <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div className="type-copy"><span>MARKET DATA</span><strong>{format.label}</strong></div>{preferenceControls}</div>
+    <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div className="type-copy"><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
     <h1>{story.headline}</h1>
+    {preferenceControls}
     <MarketFrontVisual story={story}/>
     {showCardTitle ? <p className="market-card-title">{story.cardTitle}</p> : null}
     <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>{format.cue}</strong><b>→</b></button>
@@ -272,8 +275,9 @@ function MarketFront({ story, open,preferenceControls }: { story: MarketStory; o
 function NewsFront({ story, open,preferenceControls }: { story: NewsStory; open: () => void;preferenceControls?:React.ReactNode }) {
   return <section className="story-face news-face">
     <header><PulseLogo/><span className="live-pill">CURATED</span></header>
-    <div className="type-banner news-banner"><b>N</b><div className="type-copy"><span>{newsTypeLabel(story)}</span><strong>{story.category}</strong></div>{preferenceControls}</div>
+    <div className="type-banner news-banner"><b>N</b><div className="type-copy"><span>{newsTypeLabel(story)}</span><strong>{story.category}</strong></div></div>
     <h1>{story.headline}</h1>
+    {preferenceControls}
     <div className="news-hero">
       <Image src={story.imageUrl} alt={story.player} fill sizes="(max-width: 799px) 100vw, 45vw"/>
       <div className="news-shade"/>
@@ -505,7 +509,7 @@ function WelcomeScreen({ start }: { start: () => void }) {
       </div>
       <div className="intro-personalize" aria-label="How to personalize your Pulse feed">
         <div className="intro-preference-icons" aria-hidden="true"><span><ShowMoreIcon/></span><span><ShowLessIcon/></span></div>
-        <div><span>PERSONALIZE YOUR FEED</span><p><strong>SHOW MORE</strong> prioritizes verified player stories. <strong>SHOW LESS</strong> moves that player later.</p></div>
+        <div><span>PERSONALIZE YOUR FEED</span><p>Arrows adjust stories about the <strong>NAMED PLAYER</strong>—not the page type.</p></div>
       </div>
     </div>
     <button className="intro-start" onClick={start}><span>START EXPLORING</span><b aria-hidden="true">→</b></button>
