@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const [stories,cookieStore] = await Promise.all([getFeedStories(120),cookies()]);
-  const showIntroInitially = cookieStore.get("cm_pulse_intro_v2")?.value !== "seen";
+  const showIntroInitially = cookieStore.get("cm_pulse_intro_v3")?.value !== "seen";
   return <PulseFeed initialStories={remixFeedStories(stories)} showIntroInitially={showIntroInitially}/>;
 }
