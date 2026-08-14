@@ -243,6 +243,7 @@ body {
   min-height: 44px;
   border-left-color: #ffffff12;
   background: transparent;
+  transition: background-color 160ms ease,color 160ms ease,box-shadow 160ms ease;
 }
 
 .editorial-actions .preference-button svg {
@@ -252,6 +253,27 @@ body {
 
 .editorial-actions .preference-button span {
   font-size: 8px;
+}
+
+.editorial-actions .preference-button.follow[aria-pressed="true"] {
+  background: #1e9e3840;
+  color: #62eb83;
+  box-shadow: inset 0 0 0 1px #36d65d99;
+}
+
+.editorial-actions .preference-button.less[aria-pressed="true"] {
+  background: #ff4f5b35;
+  color: #ff6670;
+  box-shadow: inset 0 0 0 1px #ff5a6599;
+}
+
+.editorial-actions .preference-button[aria-pressed="true"] svg {
+  stroke-width: 2.7;
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+.editorial-actions .preference-button[aria-pressed="true"] span {
+  color: currentColor;
 }
 
 .editorial-detail-cue {
