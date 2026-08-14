@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed } from "next/font/google";
 import "./globals.css";
+import "./pulse.css";
 
 const marketHeadline = Barlow_Condensed({
   subsets: ["latin"],

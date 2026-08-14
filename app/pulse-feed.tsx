@@ -165,10 +165,6 @@ function playerIndexFeature(story: MarketStory) {
   return { display:moveLabel(value),label:`${label} ${direction === "up" ? "UP" : direction === "down" ? "DOWN" : "FLAT"}`,context:"VS PRIOR 30 DAYS",direction };
 }
 
-function GradeStamp({ grade }: { grade: string }) {
-  return <div className="market-grade"><span>CARD GRADE</span><strong>{grade}</strong></div>;
-}
-
 function gradePremiumLabel(prices: MarketStory["gradePrices"], index: number) {
   const current = prices[index];
   const next = prices[index + 1];
@@ -178,112 +174,145 @@ function gradePremiumLabel(prices: MarketStory["gradePrices"], index: number) {
   return "+" + currency(dollars) + " · +" + premium.toLocaleString() + "% vs " + next.grade;
 }
 
-function MarketFrontVisual({ story }: { story: MarketStory }) {
-  if (story.storyKind === "player_snapshot") {
-    const items = story.insight?.items ?? [];
-    const average = story.insight?.averageChange30d ?? 0;
-    return <div className="player-snapshot-stage">
-      <div className="snapshot-card-strip">{items.slice(0,3).map((market) => <figure className="snapshot-card" key={market.id}><InsightImage insight={market}/><figcaption>{market.cardTitle}</figcaption></figure>)}</div>
-      <div className="player-snapshot-total"><span>WEIGHTED 30-DAY DIRECTION</span><strong className={average < 0 ? "down" : "up"}>{moveLabel(average)}</strong><div><b>{story.insight?.cardsTracked ?? items.length}</b> CARDS <i/> <b>{story.insight?.totalSales30d?.toLocaleString() ?? 0}</b> SALES</div></div>
+type EditorialTemplate = "movement" | "activity" | "grade" | "matchup" | "player";
+
+function editorialTemplate(kind: MarketStoryKind): EditorialTemplate {
+  if (["biggest_gain","biggest_loss","price_volume","vintage_mover"].includes(kind)) return "movement";
+  if (kind === "grade_gap") return "grade";
+  if (kind === "market_matchup") return "matchup";
+  if (["player_index","player_snapshot"].includes(kind)) return "player";
+  return "activity";
+}
+
+function StoryChrome({ label,freshness,description }: { label:string;freshness:string;description?:string }) {
+  return <>
+    <header className="editorial-header"><PulseLogo/><span className="editorial-freshness" title={description}>{freshness}</span></header>
+    <div className="editorial-type"><span>{label}</span></div>
+  </>;
+}
+
+function DetailCue({ open,showHint,label }: { open:() => void;showHint:boolean;label:string }) {
+  return <button className={showHint ? "editorial-detail-cue teaching" : "editorial-detail-cue"} onClick={open}>
+    <span>{showHint ? "SWIPE → FOR MORE" : label}</span><b aria-hidden="true">→</b>
+  </button>;
+}
+
+function EditorialCardName({ story }: { story: MarketStory }) {
+  const number = cardNumberLabel(story.cardNumber);
+  return <div className="editorial-card-name"><strong>{story.cardTitle}</strong>{number ? <span>{number}</span> : null}</div>;
+}
+
+function primaryMetric(story: MarketStory) {
+  const currentDirection = valueDirectionIsCurrent(story.freshnessDays);
+  if (story.storyKind === "recent_sale") return {
+    value:currency(story.recentSale?.price ?? story.currentValue),label:"RECENT VERIFIED SALE",support:story.recentSale ? `${story.recentSale.venue ?? "RECORDED SALE"} · ${dateLabel(story.recentSale.date)}` : "RECORDED SALE",direction:"neutral",
+  };
+  if (story.storyKind === "high_sales_30d") return {
+    value:story.sales30d.toLocaleString(),label:"SALES · 30 DAYS",support:`${story.sales7d.toLocaleString()} in the last 7 days · all grades`,direction:"neutral",
+  };
+  if (story.storyKind === "sales_surge") return {
+    value:`${story.salesPaceMultiple.toFixed(1)}×`,label:"FASTER SALES PACE",support:`${story.sales7d} last 7 days · ${story.previous23DaySales} prior 23 days`,direction:"up",
+  };
+  if (!currentDirection && storyRequiresCurrentValueDirection(story.storyKind)) return {
+    value:story.sales30d.toLocaleString(),label:"SALES · 30 DAYS",support:`${story.grade} value ${ageLabel(story.freshnessDays).toLocaleLowerCase()} · all grades`,direction:"neutral",
+  };
+  if (story.storyKind === "rookie_watch") return {
+    value:currency(story.currentValue),label:`${story.grade} ESTIMATED VALUE`,support:`${moveLabel(story.change30d)} over 30 days · ${story.sales30d} sales`,direction:story.change30d < 0 ? "down" : story.change30d > 0 ? "up" : "neutral",
+  };
+  return {
+    value:moveLabel(story.change30d),label:"30-DAY CARD MOVE",support:`${story.grade} value ${currency(story.currentValue)} · ${story.sales30d} sales`,direction:story.change30d < 0 ? "down" : story.change30d > 0 ? "up" : "neutral",
+  };
+}
+
+function MovementLayout({ story }: { story: MarketStory }) {
+  const metric = primaryMetric(story);
+  return <div className="editorial-body editorial-movement">
+    <div className="editorial-copy"><h1>{story.headline}</h1><div className={`editorial-primary-metric ${metric.direction}`}><strong>{metric.value}</strong><span>{metric.label}</span><small>{metric.support}</small></div></div>
+    <div className="editorial-media-row"><div className="editorial-card-art"><CardImage story={story}/></div><div className="editorial-grade-lockup"><span>{story.cardYear > 0 && story.cardYear < 1980 ? "VINTAGE" : "CARD GRADE"}</span><strong>{story.cardYear > 0 && story.cardYear < 1980 ? story.cardYear : story.grade}</strong>{story.cardYear > 0 && story.cardYear < 1980 ? <small>{story.grade}</small> : null}</div></div>
+    <EditorialCardName story={story}/>
+  </div>;
+}
+
+function ActivityLayout({ story }: { story: MarketStory }) {
+  const metric = primaryMetric(story);
+  return <div className="editorial-body editorial-activity">
+    <h1>{story.headline}</h1>
+    <div className="editorial-activity-stage">
+      <div className={`editorial-primary-metric ${metric.direction}`}><strong>{metric.value}</strong><span>{metric.label}</span><small>{metric.support}</small></div>
+      <div className="editorial-card-art"><CardImage story={story}/></div>
+    </div>
+    <EditorialCardName story={story}/>
+  </div>;
+}
+
+function GradeLayout({ story }: { story: MarketStory }) {
+  const prices = [...(story.gradePrices.length >= 2 ? story.gradePrices : [{ grade:story.grade,price:story.currentValue }])]
+    .sort((first,second) => second.price - first.price).slice(0,3);
+  const premium = prices.length > 1 && prices[prices.length - 1].price > 0
+    ? Math.round((prices[0].price / prices[prices.length - 1].price - 1) * 100)
+    : Math.round((story.gradeGapMultiple - 1) * 100);
+  return <div className="editorial-body editorial-grade">
+    <h1>{story.headline}</h1>
+    <div className="editorial-grade-stage">
+      <div className="editorial-card-art"><CardImage story={story}/></div>
+      <div className="editorial-grade-prices">{prices.map((item,index) => <div key={item.grade} className={index === 0 ? "top" : ""}><span>{item.grade}</span><strong>{currency(item.price)}</strong></div>)}</div>
+    </div>
+    <div className="editorial-premium"><strong>+{premium.toLocaleString()}%</strong><span>TOP GRADE PREMIUM</span></div>
+    <EditorialCardName story={story}/>
+  </div>;
+}
+
+function MatchupLayout({ story }: { story: MarketStory }) {
+  const items = (story.insight?.items ?? []).slice(0,2);
+  return <div className="editorial-body editorial-matchup">
+    <h1>{items.map((item) => item.player).join(" vs. ") || story.headline}</h1>
+    <div className="editorial-matchup-grid">{items.map((market,index) => <article key={market.id}>
+      <div className="editorial-matchup-image"><InsightImage insight={market}/>{index === 0 ? <i>VS</i> : null}</div>
+      <span>{market.player}</span><strong>{currency(market.currentValue)}</strong><small>{market.grade} · {market.sales30d} sales</small>
+    </article>)}</div>
+    <p>SIMILAR GRADE · SIMILAR SALES VOLUME</p>
+  </div>;
+}
+
+function PlayerLayout({ story }: { story: MarketStory }) {
+  if (story.storyKind === "player_index") {
+    const feature = playerIndexFeature(story);
+    return <div className="editorial-body editorial-player editorial-player-index">
+      <div className="editorial-player-portrait"><PlayerIndexPortrait key={story.imageUrl} story={story}/><div className="editorial-player-shade"/></div>
+      <div className="editorial-player-copy"><span>{story.sport} · 30-DAY INDEX</span><h1>{story.player}</h1><div className={`editorial-primary-metric ${feature.direction}`}><strong>{feature.display}</strong><span>{feature.label}</span><small>{feature.context}</small></div><p>TRADE SCORE <b>{story.insight?.score ?? 0}</b> · {story.insight?.scoreLabel ?? "INDEX"}</p></div>
     </div>;
   }
-
-  if (story.storyKind === "price_volume") return <div className="market-stage signal-stage">
-    <CardImage story={story}/><div className="signal-tally"><GradeStamp grade={story.grade}/><small>{story.insight?.label ?? "PRICE + VOLUME"}</small><strong className={story.change30d < 0 ? "down" : "up"}>{moveLabel(story.change30d)}</strong><b>{story.sales30d.toLocaleString()} SALES</b><span>{story.insight?.volumePercentile ?? 0}th percentile in Pulse</span></div>
+  const items = (story.insight?.items ?? []).slice(0,3);
+  const average = story.insight?.averageChange30d ?? 0;
+  return <div className="editorial-body editorial-player editorial-player-market">
+    <h1>{story.headline}</h1>
+    <div className="editorial-snapshot-strip">{items.map((market) => <figure key={market.id}><InsightImage insight={market}/><figcaption>{market.grade}<b>{currency(market.currentValue)}</b></figcaption></figure>)}</div>
+    <div className={`editorial-primary-metric ${average < 0 ? "down" : average > 0 ? "up" : "neutral"}`}><strong>{moveLabel(average)}</strong><span>WEIGHTED 30-DAY DIRECTION</span><small>{story.insight?.totalSales30d?.toLocaleString() ?? 0} sales across {story.insight?.cardsTracked ?? items.length} cards</small></div>
   </div>;
-
-  if (story.storyKind === "market_matchup") {
-    const items = story.insight?.items ?? [];
-    return <div className="matchup-stage">{items.slice(0,2).map((market,index) => <div className="matchup-side" key={market.id}><InsightImage insight={market}/><span>{market.player}</span><strong>{currency(market.currentValue)}</strong><b className={market.change30d < 0 ? "down" : "up"}>{moveLabel(market.change30d)}</b>{index === 0 ? <i>VS</i> : null}</div>)}</div>;
-  }
-
-  if (storyRequiresCurrentValueDirection(story.storyKind) && !valueDirectionIsCurrent(story.freshnessDays)) return <div className="market-stage volume-stage">
-    <CardImage story={story}/><div className="volume-tally"><GradeStamp grade={story.grade}/><small>CARD-WIDE SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>ALL GRADES · 30 DAYS</b><span>{story.sales7d.toLocaleString()} card-wide sales in the last 7 days</span></div>
-  </div>;
-
-  if (story.storyKind === "high_sales_30d") return <div className="market-stage volume-stage">
-    <CardImage story={story}/><div className="volume-tally"><GradeStamp grade={story.grade}/><small>CARD-WIDE SALES</small><strong>{story.sales30d.toLocaleString()}</strong><b>ALL GRADES · 30 DAYS</b><span>{story.sales7d.toLocaleString()} card-wide sales in the last 7 days</span></div>
-  </div>;
-
-  if (story.storyKind === "biggest_gain" || story.storyKind === "biggest_loss") {
-    const loss = story.storyKind === "biggest_loss";
-    return <div className="market-stage mover-stage"><CardImage story={story}/><div className="mover-tally"><GradeStamp grade={story.grade}/><small>CARD-WIDE 30D MOVE</small><strong>{loss ? "−" : "+"}{Math.abs(story.change30d).toFixed(1)}%</strong><b>{loss ? "MOVING LOWER" : "MOVING HIGHER"}</b><span>{story.grade} estimated value<br/>{currency(story.currentValue)}</span></div></div>;
-  }
-
-  if (story.storyKind === "recent_sale") return <div className="market-stage sale-stage"><CardImage story={story}/><div className="sale-ticket"><GradeStamp grade={story.grade}/><small>CONFIRMED COMP</small><b>SOLD TODAY</b><strong>{currency(story.recentSale?.price ?? story.currentValue)}</strong><span>{story.recentSale?.venue ?? "Recorded sale"}</span><em>{story.recentSale ? dateLabel(story.recentSale.date) : "Today"}</em></div></div>;
-
-  if (story.storyKind === "grade_gap") {
-    const prices = story.gradePrices.length >= 2 ? story.gradePrices : [{ grade:story.grade,price:story.currentValue }];
-    return <div className="market-stage gap-stage"><CardImage story={story}/><div className="grade-ladder"><small>GRADE PRICE ESTIMATES</small>{prices.map((item,index) => <div key={item.grade} className={index === 0 ? "premium" : ""}><span>{item.grade}</span><strong>{currency(item.price)}</strong>{gradePremiumLabel(prices,index) ? <em>{gradePremiumLabel(prices,index)}</em> : null}</div>)}<b>{prices[0].grade} IS {story.gradeGapMultiple.toFixed(1)}× {prices[prices.length - 1].grade}</b></div></div>;
-  }
-
-  if (story.storyKind === "sales_surge") return <div className="market-stage surge-stage"><CardImage story={story}/><div className="surge-tally"><GradeStamp grade={story.grade}/><small>CARD-WIDE SALES PACE</small><strong>{story.salesPaceMultiple.toFixed(1)}×</strong><b>FASTER</b><div><span><strong>{story.sales7d}</strong>LAST 7D</span><i>→</i><span><strong>{story.previous23DaySales}</strong>PRIOR 23D</span></div></div></div>;
-
-  if (story.storyKind === "vintage_mover") return <div className="market-stage vintage-stage"><div className="vintage-card-wrap"><CardImage story={story}/></div><div className="vintage-tally"><GradeStamp grade={story.grade}/><small>VINTAGE CARD</small><strong>{story.cardYear || "VINTAGE"}</strong><b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b><span>Card-wide 30-day move<br/>{story.grade} value · {currency(story.currentValue)}</span></div></div>;
-
-  const currentDirection = valueDirectionIsCurrent(story.freshnessDays);
-  return <div className="market-stage rookie-stage"><div className="rookie-card-wrap"><span>RC</span><CardImage story={story}/></div><div className="rookie-tally"><GradeStamp grade={story.grade}/><small>{story.grade} EST. VALUE</small><strong>{currency(story.currentValue)}</strong>{currentDirection ? <b className={story.change30d < 0 ? "down" : "up"}>{story.change30d > 0 ? "+" : ""}{story.change30d.toFixed(1)}%</b> : <b>{story.sales30d} SALES</b>}<span>{currentDirection ? "Card-wide 30-day move" : "All grades · 30 days"}</span></div></div>;
 }
 
-function PlayerIndexFront({ story, open,preferenceControls }: { story: MarketStory;open: () => void;preferenceControls?:React.ReactNode }) {
-  const insight = story.insight;
-  const feature = playerIndexFeature(story);
-  const averageSale = compactCurrency(insight?.averageSale30d ?? 0);
-  const activity = insight?.featureMetric === "sales_change"
-    ? [{ label:"TRADED VALUE",value:compactCurrency(insight?.totalValue30d ?? 0) },{ label:"AVERAGE SALE",value:averageSale }]
-    : insight?.featureMetric === "traded_value" || insight?.featureMetric === "traded_value_change"
-      ? [{ label:"AVERAGE SALE",value:averageSale },{ label:"RECORDED SALES",value:compactNumber(insight?.totalSales30d ?? 0) }]
-      : [{ label:"TRADED VALUE",value:compactCurrency(insight?.totalValue30d ?? 0) },{ label:"RECORDED SALES",value:compactNumber(insight?.totalSales30d ?? 0) }];
-  return <section className="story-face market-face market-player-index player-index-front">
-    <header><PulseLogo/><span className="live-pill" title={marketFreshnessDescription(story)} aria-label={marketFreshnessDescription(story)}>{marketFreshnessLabel(story)}</span></header>
-    <div className="player-index-type"><b aria-hidden="true">PI</b><div className="type-copy"><span>PLAYER INDEX</span><strong>30-DAY MARKET VIEW</strong></div></div>
-    {preferenceControls}
-    <div className="player-index-hero">
-      <PlayerIndexPortrait key={story.imageUrl} story={story}/>
-      <div className="player-index-hero-shade"/>
-      <div className="player-index-score-badge"><span>TRADE SCORE</span><strong>{insight?.score ?? 0}</strong><b>{insight?.scoreLabel ?? "INDEX"}</b></div>
-      <div className="player-index-hero-copy">
-        <span>{story.sport} · PLAYER MARKET</span>
-        <h1>{story.player}</h1>
-        <div className="player-index-move"><strong className={feature.direction === "down" ? "down" : feature.direction === "up" ? "up" : undefined}>{feature.display}</strong><p>{feature.label}<b>{feature.context}</b></p></div>
-      </div>
-    </div>
-    <div className="player-index-activity" aria-label="30-day Player Index activity">
-      <p><span>{activity[0].label}</span><strong>{activity[0].value}</strong></p>
-      <i/>
-      <p><span>{activity[1].label}</span><strong>{activity[1].value}</strong></p>
-    </div>
-    <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>VIEW FULL PLAYER INDEX</strong><b>→</b></button>
-  </section>;
-}
-
-function MarketFront({ story, open,preferenceControls }: { story: MarketStory; open: () => void;preferenceControls?:React.ReactNode }) {
-  if (story.storyKind === "player_index") return <PlayerIndexFront story={story} open={open} preferenceControls={preferenceControls}/>;
+function MarketFront({ story,open,preferenceControls,showDetailHint }: { story:MarketStory;open:() => void;preferenceControls?:React.ReactNode;showDetailHint:boolean }) {
   const format = marketFormat(story);
-  const styleClass = kindClass(story.storyKind);
-  return <section className={"story-face market-face " + styleClass}>
-    <header><PulseLogo/><span className="live-pill" title={marketFreshnessDescription(story)} aria-label={marketFreshnessDescription(story)}>{marketFreshnessLabel(story)}</span></header>
-    <div className="type-banner market-banner"><b aria-hidden="true">{format.icon}</b><div className="type-copy"><span>MARKET DATA</span><strong>{format.label}</strong></div></div>
-    <h1>{story.headline}</h1>
-    {preferenceControls}
-    <MarketFrontVisual story={story}/>
-    <button className="detail-cue market-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>{format.cue}</strong><b>→</b></button>
+  const template = editorialTemplate(story.storyKind);
+  return <section className={`story-face market-face editorial-face editorial-${template}-face ${kindClass(story.storyKind)}`}>
+    <StoryChrome label={format.label} freshness={marketFreshnessLabel(story)} description={marketFreshnessDescription(story)}/>
+    {template === "movement" ? <MovementLayout story={story}/> : null}
+    {template === "activity" ? <ActivityLayout story={story}/> : null}
+    {template === "grade" ? <GradeLayout story={story}/> : null}
+    {template === "matchup" ? <MatchupLayout story={story}/> : null}
+    {template === "player" ? <PlayerLayout story={story}/> : null}
+    <div className="editorial-actions">{preferenceControls}<DetailCue open={open} showHint={showDetailHint} label="DETAILS"/></div>
   </section>;
 }
 
-function NewsFront({ story, open,preferenceControls }: { story: NewsStory; open: () => void;preferenceControls?:React.ReactNode }) {
-  return <section className="story-face news-face">
-    <header><PulseLogo/><span className="live-pill">CURATED</span></header>
-    <div className="type-banner news-banner"><b>N</b><div className="type-copy"><span>{newsTypeLabel(story)}</span><strong>{story.category}</strong></div></div>
-    <h1>{story.headline}</h1>
-    {preferenceControls}
-    <div className="news-hero">
-      <Image src={story.imageUrl} alt={story.player} fill sizes="(max-width: 799px) 100vw, 45vw"/>
-      <div className="news-shade"/>
-      <div className="news-source"><span>{story.source}</span><b>{dateLabel(story.publishedAt)}</b></div>
+function NewsFront({ story,open,preferenceControls,showDetailHint }: { story:NewsStory;open:() => void;preferenceControls?:React.ReactNode;showDetailHint:boolean }) {
+  return <section className="story-face news-face editorial-face editorial-news-face">
+    <StoryChrome label={newsTypeLabel(story)} freshness={dateLabel(story.publishedAt)}/>
+    <div className="editorial-body editorial-news">
+      <div className="editorial-news-image"><Image src={story.imageUrl} alt={story.player} fill sizes="(max-width: 430px) 100vw, 430px"/><div className="editorial-news-shade"/></div>
+      <div className="editorial-news-copy"><span>{story.player} · {story.sport}</span><h1>{story.headline}</h1><p>{story.summary}</p><small>{story.source}</small></div>
     </div>
-    <div className="news-grabber"><span>{story.player} · {story.sport}</span><p>{story.summary}</p></div>
-    <button className="detail-cue news-cue" onClick={open}><span>SWIPE RIGHT OR TAP</span><strong>READ THE STORY</strong><b>→</b></button>
+    <div className="editorial-actions">{preferenceControls}<DetailCue open={open} showHint={showDetailHint} label="READ"/></div>
   </section>;
 }
 
@@ -442,7 +471,7 @@ function MarketDetail({ story, close,previous }: { story: MarketStory; close: ()
       {!combinedMarket ? <CollectorEvidence story={story} previous={previous}/> : null}
       <div className="why"><span>COLLECTOR TAKEAWAY</span><p>{story.summary}</p></div>
     </div>
-    <button className="return-cue" onClick={close}>← SWIPE LEFT TO RETURN</button>
+    <button className="return-cue" onClick={close}>← BACK</button>
   </section>;
 }
 
@@ -456,7 +485,7 @@ function NewsDetail({ story, close }: { story: NewsStory; close: () => void }) {
       <p className="article-summary">{story.summary}</p>
       <a className="article-link" href={story.articleUrl} target="_blank" rel="noreferrer">READ THE ORIGINAL ARTICLE <b>↗</b></a>
     </div>
-    <button className="return-cue" onClick={close}>← SWIPE LEFT TO RETURN</button>
+    <button className="return-cue" onClick={close}>← BACK</button>
   </section>;
 }
 
@@ -466,30 +495,67 @@ function preferencePlayer(story: FeedStory) {
   return story.player.trim() || null;
 }
 
-function Story({ story,previous,preferences,onPreferenceChange }: {
+function Story({ story,previous,preferences,onPreferenceChange,showDetailHint,onDetailOpened }: {
   story:FeedStory;previous?:StoredMarketSnapshot;preferences:PlayerPreferences;onPreferenceChange:PreferenceChange;
+  showDetailHint:boolean;onDetailOpened:() => void;
 }) {
   const [open,setOpen] = useState(false);
-  const start = useRef<{x:number;y:number}|null>(null);
+  const start = useRef<{x:number;y:number;axis:"x"|"y"|null}|null>(null);
+  const track = useRef<HTMLDivElement|null>(null);
   const player = preferencePlayer(story);
   const preferenceControls = player
     ? <PreferenceControls player={player} preferences={preferences} onChange={onPreferenceChange}/>
     : null;
   const touchStart = (event: React.TouchEvent) => {
     const touch = event.touches[0];
-    start.current = {x:touch.clientX,y:touch.clientY};
+    start.current = {x:touch.clientX,y:touch.clientY,axis:null};
+  };
+  const touchMove = (event: React.TouchEvent) => {
+    if (!start.current || !track.current) return;
+    const touch = event.touches[0];
+    const x = touch.clientX - start.current.x;
+    const y = touch.clientY - start.current.y;
+    if (!start.current.axis && Math.max(Math.abs(x),Math.abs(y)) > 8) {
+      start.current.axis = Math.abs(x) > Math.abs(y) ? "x" : "y";
+    }
+    if (start.current.axis !== "x") return;
+    const width = event.currentTarget.clientWidth;
+    const drag = open ? Math.max(-width,Math.min(0,x)) : Math.min(width,Math.max(0,x));
+    track.current.classList.add("dragging");
+    track.current.style.setProperty("--drag-x",`${drag}px`);
   };
   const touchEnd = (event: React.TouchEvent) => {
     if (!start.current) return;
     const touch = event.changedTouches[0];
     const x = touch.clientX - start.current.x;
     const y = touch.clientY - start.current.y;
+    const horizontal = start.current.axis === "x" || (Math.abs(x) > Math.abs(y) && Math.abs(x) > 8);
     start.current = null;
-    if (Math.abs(x) > 55 && Math.abs(x) > Math.abs(y)) setOpen(x > 0);
+    if (horizontal && x > 55 && !open) {
+      setOpen(true);
+      onDetailOpened();
+    } else if (horizontal && x < -55 && open) {
+      setOpen(false);
+    }
+    if (track.current) {
+      track.current.classList.remove("dragging");
+      track.current.style.setProperty("--drag-x","0px");
+    }
   };
-  return <article className={"pulse-story " + story.type + (open ? " open" : "")} onTouchStart={touchStart} onTouchEnd={touchEnd}>
-    <div className="story-track">
-      {story.type === "market" ? <MarketFront story={story} open={() => setOpen(true)} preferenceControls={preferenceControls}/> : <NewsFront story={story} open={() => setOpen(true)} preferenceControls={preferenceControls}/>}
+  const touchCancel = () => {
+    start.current = null;
+    if (track.current) {
+      track.current.classList.remove("dragging");
+      track.current.style.setProperty("--drag-x","0px");
+    }
+  };
+  const openDetail = () => {
+    setOpen(true);
+    onDetailOpened();
+  };
+  return <article className={"pulse-story " + story.type + (open ? " open" : "")} onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={touchEnd} onTouchCancel={touchCancel}>
+    <div className="story-track" ref={track}>
+      {story.type === "market" ? <MarketFront story={story} open={openDetail} preferenceControls={preferenceControls} showDetailHint={showDetailHint}/> : <NewsFront story={story} open={openDetail} preferenceControls={preferenceControls} showDetailHint={showDetailHint}/>}
       {story.type === "market" ? <MarketDetail story={story} close={() => setOpen(false)} previous={previous}/> : <NewsDetail story={story} close={() => setOpen(false)}/>}
     </div>
   </article>;
@@ -504,21 +570,18 @@ function EmptyFeed() {
 
 function WelcomeScreen({ start }: { start: () => void }) {
   return <section className="pulse-intro" aria-labelledby="pulse-intro-title">
-    <header><PulseLogo/><span>YOUR HOBBY FEED</span></header>
+    <header><PulseLogo/><span>YOUR COLLECTOR FEED</span></header>
     <div className="intro-body">
-      <span className="intro-kicker">MARKET INTELLIGENCE · CURATED NEWS</span>
-      <h1 id="pulse-intro-title">Know what’s moving.</h1>
+      <span className="intro-kicker">WELCOME TO PULSE</span>
+      <h1 id="pulse-intro-title">The hobby,<br/>one story at a time.</h1>
       <p>See what’s moving, selling and making news in the cards you care about.</p>
-      <div className="intro-topics" aria-label="Pulse coverage">
-        <span>PRICE MOVES</span><span>RECENT SALES</span><span>CARD NEWS</span>
-      </div>
       <div className="intro-controls" aria-label="How to use Pulse">
-        <article><b aria-hidden="true">↑</b><div><span>SCROLL UP</span><strong>NEXT STORY</strong></div></article>
-        <article><b aria-hidden="true">→</b><div><span>SWIPE RIGHT</span><strong>DETAILS &amp; STATS</strong></div></article>
+        <article><b aria-hidden="true">↑</b><div><span>SWIPE UP</span><strong>NEXT PULSE</strong></div></article>
+        <article><b aria-hidden="true">→</b><div><span>SWIPE RIGHT</span><strong>MORE DETAIL</strong></div></article>
       </div>
       <div className="intro-personalize" aria-label="How to personalize your Pulse feed">
         <div className="intro-preference-icons" aria-hidden="true"><span><ShowMoreIcon/></span><span><ShowLessIcon/></span></div>
-        <div><span>PERSONALIZE YOUR FEED</span><p>Arrows adjust stories about the <strong>NAMED PLAYER</strong>—not the page type.</p></div>
+        <div><span>FINE-TUNE A PLAYER</span><p>Use the player arrows to see more or fewer stories about that athlete.</p></div>
       </div>
     </div>
     <button className="intro-start" onClick={start}><span>START EXPLORING</span><b aria-hidden="true">→</b></button>
@@ -528,6 +591,8 @@ function WelcomeScreen({ start }: { start: () => void }) {
 const RECENT_CARD_STORAGE_KEY = "cm_pulse_recent_cards_v1";
 const MARKET_SNAPSHOT_STORAGE_KEY = "cm_pulse_market_snapshots_v1";
 const PLAYER_PREFERENCES_STORAGE_KEY = "cm_pulse_player_preferences_v1";
+const VERTICAL_GESTURE_STORAGE_KEY = "cm_pulse_vertical_gesture_v1";
+const DETAIL_GESTURE_STORAGE_KEY = "cm_pulse_detail_gesture_v1";
 const MARKET_SNAPSHOT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function playerPreferencesFromStorage(raw: string | null):PlayerPreferences {
@@ -561,6 +626,8 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
   const preferenceNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastViewedStoryId = useRef<string | null>(null);
   const [showIntro,setShowIntro] = useState(showIntroInitially);
+  const [showVerticalHint,setShowVerticalHint] = useState(false);
+  const [showDetailHint,setShowDetailHint] = useState(false);
   const [playerPreferences,setPlayerPreferences] = useState<PlayerPreferences>(EMPTY_PLAYER_PREFERENCES);
   const [preferenceNotice,setPreferenceNotice] = useState("");
   const [previousMarketSnapshots,setPreviousMarketSnapshots] = useState<Record<string,StoredMarketSnapshot>>({});
@@ -599,6 +666,13 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
     }
     playerPreferencesRef.current = storedPreferences;
     setPlayerPreferences(storedPreferences);
+    try {
+      setShowVerticalHint(!localStorage.getItem(VERTICAL_GESTURE_STORAGE_KEY));
+      setShowDetailHint(!localStorage.getItem(DETAIL_GESTURE_STORAGE_KEY));
+    } catch {
+      setShowVerticalHint(true);
+      setShowDetailHint(true);
+    }
     const remixed = remixFeedStories(initialStories,undefined,{
       recentCardTimestamps:recentCardTimestamps.current,now,...preferenceRemixOptions(storedPreferences),
     });
@@ -718,6 +792,10 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
   function handleScroll(event: React.UIEvent<HTMLElement>) {
     const feed = event.currentTarget;
     const visibleIndex = Math.max(0,Math.min(entries.length - 1,Math.round(feed.scrollTop / feed.clientHeight)));
+    if (visibleIndex !== activeIndexRef.current && showVerticalHint) {
+      setShowVerticalHint(false);
+      try { localStorage.setItem(VERTICAL_GESTURE_STORAGE_KEY,"seen"); } catch {}
+    }
     activeIndexRef.current = visibleIndex;
     if (entries[visibleIndex]) scheduleStoryViewed(entries[visibleIndex].story);
     const remaining = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
@@ -727,6 +805,14 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
   function dismissIntro() {
     document.cookie = "cm_pulse_intro_v3=seen; Path=/; Max-Age=31536000; SameSite=Lax";
     setShowIntro(false);
+    setShowVerticalHint(true);
+    setShowDetailHint(true);
+  }
+
+  function markDetailGestureLearned() {
+    if (!showDetailHint) return;
+    setShowDetailHint(false);
+    try { localStorage.setItem(DETAIL_GESTURE_STORAGE_KEY,"seen"); } catch {}
   }
 
   if (showIntro) return <main className="app-shell"><WelcomeScreen start={dismissIntro}/></main>;
@@ -734,8 +820,9 @@ export function PulseFeed({ initialStories,showIntroInitially = false }: { initi
   return <main className="app-shell">
     <nav className="desktop-nav"><PulseLogo/><div><button className="active">For You</button><button>Market</button><button>News</button></div><a href="/admin/news">News Admin</a></nav>
     <section className="feed" aria-label="Pulse market and news feed" onScroll={handleScroll}>
-      {entries.length ? entries.map(({instanceId,story}) => <Story key={instanceId} story={story} previous={story.type === "market" ? previousMarketSnapshots[story.cardId] : undefined} preferences={playerPreferences} onPreferenceChange={handlePreferenceChange}/>) : <EmptyFeed/>}
+      {entries.length ? entries.map(({instanceId,story}) => <Story key={instanceId} story={story} previous={story.type === "market" ? previousMarketSnapshots[story.cardId] : undefined} preferences={playerPreferences} onPreferenceChange={handlePreferenceChange} showDetailHint={showDetailHint} onDetailOpened={markDetailGestureLearned}/>) : <EmptyFeed/>}
     </section>
+    <div className={showVerticalHint ? "vertical-gesture-hint visible" : "vertical-gesture-hint"} aria-hidden="true"><b>↑</b><span>SWIPE UP FOR NEXT PULSE</span></div>
     <div className={preferenceNotice ? "preference-notice visible" : "preference-notice"} role="status" aria-live="polite">{preferenceNotice}</div>
     <nav className="mobile-nav"><button className="active"><b>⌁</b><span>Pulse</span></button><button><b>○</b><span>Compete</span></button><button><b>□</b><span>Collection</span></button><button><b>◇</b><span>Shop</span></button><button><b>●</b><span>Profile</span></button></nav>
   </main>;
