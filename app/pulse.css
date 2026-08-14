@@ -869,7 +869,7 @@ body {
 .vertical-gesture-hint {
   position: absolute;
   z-index: 18;
-  bottom: calc(119px + env(safe-area-inset-bottom));
+  bottom: calc(180px + env(safe-area-inset-bottom));
   left: 50%;
   display: flex;
   align-items: center;

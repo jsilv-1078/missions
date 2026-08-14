@@ -217,7 +217,7 @@ function primaryMetric(story: MarketStory) {
     value:story.sales30d.toLocaleString(),label:"SALES · 30 DAYS",support:`${story.grade} value ${ageLabel(story.freshnessDays).toLocaleLowerCase()} · all grades`,direction:"neutral",
   };
   if (story.storyKind === "rookie_watch") return {
-    value:currency(story.currentValue),label:`${story.grade} ESTIMATED VALUE`,support:`${moveLabel(story.change30d)} over 30 days · ${story.sales30d} sales`,direction:story.change30d < 0 ? "down" : story.change30d > 0 ? "up" : "neutral",
+    value:currency(story.currentValue),label:`${story.grade} ESTIMATED VALUE`,support:Math.abs(story.change30d) >= .1 ? `${moveLabel(story.change30d)} over 30 days · ${story.sales30d} sales` : `${story.sales30d} sales · 30 days`,direction:story.change30d < 0 ? "down" : story.change30d > 0 ? "up" : "neutral",
   };
   return {
     value:moveLabel(story.change30d),label:"30-DAY CARD MOVE",support:`${story.grade} value ${currency(story.currentValue)} · ${story.sales30d} sales`,direction:story.change30d < 0 ? "down" : story.change30d > 0 ? "up" : "neutral",
