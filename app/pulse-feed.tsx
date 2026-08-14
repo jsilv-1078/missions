@@ -286,7 +286,7 @@ function PlayerLayout({ story }: { story: MarketStory }) {
   const average = story.insight?.averageChange30d ?? 0;
   return <div className="editorial-body editorial-player editorial-player-market">
     <h1>{story.headline}</h1>
-    <div className="editorial-snapshot-strip">{items.map((market) => <figure key={market.id}><InsightImage insight={market}/><figcaption>{market.grade}<b>{currency(market.currentValue)}</b></figcaption></figure>)}</div>
+    <div className="editorial-snapshot-strip" data-card-count={items.length}>{items.map((market) => <figure key={market.id}><InsightImage insight={market}/><figcaption>{market.grade}<b>{currency(market.currentValue)}</b></figcaption></figure>)}</div>
     <div className={`editorial-primary-metric ${average < 0 ? "down" : average > 0 ? "up" : "neutral"}`}><strong>{moveLabel(average)}</strong><span>WEIGHTED 30-DAY DIRECTION</span><small>{story.insight?.totalSales30d?.toLocaleString() ?? 0} sales across {story.insight?.cardsTracked ?? items.length} cards</small></div>
   </div>;
 }
