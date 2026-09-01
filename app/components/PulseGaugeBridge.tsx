@@ -16,22 +16,36 @@ export default function PulseGaugeBridge(){
         if(!cardName)return
         const cardNumber=face.querySelector<HTMLElement>('.editorial-card-name span')?.textContent?.trim()??''
         const query=[cardName,cardNumber].filter(Boolean).join(' ')
+        const href=`/gauge?q=${encodeURIComponent(query)}`
         let link=actions.querySelector<HTMLAnchorElement>('.pulse-gauge-link')
         if(!link){
           link=document.createElement('a')
           link.className='pulse-gauge-link'
           link.setAttribute('aria-label',`Research ${cardName} in Gauge`)
+          link.href=href
+          link.innerHTML=`${gaugeIcon()}<span>GAUGE</span>`
           const detail=actions.querySelector('.editorial-detail-cue')
           if(detail)actions.insertBefore(link,detail)
           else actions.appendChild(link)
+          return
         }
-        link.href=`/gauge?q=${encodeURIComponent(query)}`
-        link.innerHTML=`${gaugeIcon()}<span>GAUGE</span>`
+        if(link.getAttribute('href')!==href) link.setAttribute('href',href)
+        const aria=`Research ${cardName} in Gauge`
+        if(link.getAttribute('aria-label')!==aria) link.setAttribute('aria-label',aria)
       })
     }
+
     wire()
-    const observer=new MutationObserver(wire)
-    observer.observe(document.body,{subtree:true,childList:true,characterData:true})
+    let scheduled=false
+    const observer=new MutationObserver(()=>{
+      if(scheduled)return
+      scheduled=true
+      requestAnimationFrame(()=>{
+        scheduled=false
+        wire()
+      })
+    })
+    observer.observe(document.body,{subtree:true,childList:true})
     return()=>observer.disconnect()
   },[])
   return null
