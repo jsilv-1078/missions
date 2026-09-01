@@ -13,7 +13,7 @@ export default async function Home() {
       <PulseFeed initialStories={remixFeedStories(stories)} showIntroInitially={showIntroInitially}/>
       <nav className="cm-bottom-nav" aria-label="Card Madness navigation">
         <a className="cm-nav-item selected" href="/"><span className="cm-nav-icon">∿</span><small>Pulse</small></a>
-        <a className="cm-nav-item" href="/collection-demo"><span className="cm-nav-icon">⌁</span><small>Market</small></a>
+        <a className="cm-nav-item" href="/market"><span className="cm-nav-icon">⌁</span><small>Market</small></a>
         <button className="cm-scan-button" type="button" aria-label="Scan card">▣</button>
         <a className="cm-nav-item" href="/collection-demo?view=collection"><span className="cm-nav-icon">▥</span><small>My Collection</small></a>
         <button className="cm-nav-item" type="button"><span className="cm-nav-icon">☰</span><small>More</small></button>
