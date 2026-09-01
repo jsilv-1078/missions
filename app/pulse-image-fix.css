@@ -1,0 +1,81 @@
+/* Defensive sizing for Pulse card art. Keep media inside its allotted panel so
+   tall or oddly cropped source images can never cover headlines, metrics,
+   card names, preference controls, or the bottom navigation. */
+.editorial-card-art,
+.editorial-matchup-image,
+.editorial-snapshot-strip,
+.insight-card-image,
+.market-card-image {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.editorial-card-art .market-card-image,
+.editorial-matchup-image .insight-card-image {
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+.editorial-card-art .market-card-image img,
+.editorial-matchup-image img,
+.editorial-snapshot-strip img,
+.insight-card-image img,
+.market-card-image img {
+  object-fit: contain !important;
+  object-position: center center !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+/* Movement/activity layouts previously allowed card art to grow too tall on
+   shorter phones. These caps preserve enough vertical room for copy/actions. */
+.editorial-media-row .editorial-card-art {
+  height: min(29dvh,250px) !important;
+  max-height: 250px !important;
+}
+
+.editorial-activity-stage .editorial-card-art {
+  height: min(31dvh,270px) !important;
+  max-height: 270px !important;
+}
+
+.editorial-grade-stage .editorial-card-art {
+  height: min(27dvh,230px) !important;
+  max-height: 230px !important;
+}
+
+.editorial-matchup-image {
+  height: min(28dvh,240px) !important;
+  max-height: 240px !important;
+}
+
+/* Ensure text/control layers always remain above media if a browser or remote
+   image produces unexpected intrinsic dimensions during loading. */
+.editorial-copy,
+.editorial-primary-metric,
+.editorial-card-name,
+.editorial-actions,
+.editorial-detail-cue,
+.editorial-grade-lockup,
+.editorial-grade-prices,
+.editorial-premium,
+.story-preferences {
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-height: 760px) {
+  .editorial-media-row .editorial-card-art { height:min(24dvh,190px)!important; max-height:190px!important; }
+  .editorial-activity-stage .editorial-card-art { height:min(26dvh,205px)!important; max-height:205px!important; }
+  .editorial-grade-stage .editorial-card-art { height:min(23dvh,185px)!important; max-height:185px!important; }
+  .editorial-matchup-image { height:min(24dvh,190px)!important; max-height:190px!important; }
+}
+
+@media (max-height: 680px) {
+  .editorial-media-row .editorial-card-art,
+  .editorial-activity-stage .editorial-card-art,
+  .editorial-grade-stage .editorial-card-art,
+  .editorial-matchup-image {
+    max-height:160px!important;
+  }
+}
