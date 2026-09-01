@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 import "./pulse.css";
+import "./pulse-image-fix.css";
 import "./cm-nav.css";
 
 const marketHeadline = Barlow_Condensed({ subsets:["latin"],weight:"600",style:"normal",display:"swap",variable:"--font-market-headline" });
