@@ -8,16 +8,17 @@ const grades=['Raw','PSA 10','PSA 9','SGC 10']
 const money=(n?:number)=>n==null?'—':`$${n.toLocaleString('en-US',{maximumFractionDigits:0})}`
 
 export default function GaugePage(){
- const [mode,setMode]=useState<'quick'|'cert'>('quick'),[q,setQ]=useState(''),[cert,setCert]=useState(''),[grade,setGrade]=useState('Raw'),[loading,setLoading]=useState(false),[data,setData]=useState<Payload|null>(null)
+ const [mode,setMode]=useState<'quick'|'scan'|'cert'>('quick'),[q,setQ]=useState(''),[cert,setCert]=useState(''),[grade,setGrade]=useState('Raw'),[loading,setLoading]=useState(false),[data,setData]=useState<Payload|null>(null),[scanPreview,setScanPreview]=useState<string>('')
  const trend=useMemo(()=>data?.trendSummary?.percentChange,[data])
- async function run(){setLoading(true);setData(null);try{const sp=new URLSearchParams();if(mode==='cert')sp.set('cert',cert);else sp.set('q',q);sp.set('grade',grade);const r=await fetch(`/api/gauge?${sp.toString()}`,{cache:'no-store'});const j=await r.json();setData(j)}catch{setData({error:'Gauge is temporarily unavailable.'})}finally{setLoading(false)}}
+ async function run(){if(mode==='scan'){setData({error:'Photo selected. Image identification is ready for the next API step; use Search Card or PSA Cert for live results now.'});return}setLoading(true);setData(null);try{const sp=new URLSearchParams();if(mode==='cert')sp.set('cert',cert);else sp.set('q',q);sp.set('grade',grade);const r=await fetch(`/api/gauge?${sp.toString()}`,{cache:'no-store'});const j=await r.json();setData(j)}catch{setData({error:'Gauge is temporarily unavailable.'})}finally{setLoading(false)}}
+ function chooseScan(file?:File){if(!file)return;const url=URL.createObjectURL(file);setScanPreview(url);setData(null)}
  return <main className="gauge-shell">
   <header className="gauge-header"><div><p>GAUGE</p><h1>Know before you buy.</h1></div><span>LIVE</span></header>
   <section className="gauge-search">
-   <div className="mode-row"><button className={mode==='quick'?'on':''} onClick={()=>setMode('quick')}>Card search</button><button className={mode==='cert'?'on':''} onClick={()=>setMode('cert')}>PSA cert</button></div>
-   {mode==='quick'?<textarea value={q} onChange={e=>setQ(e.target.value)} placeholder="Paste or type a card listing"/>:<input value={cert} onChange={e=>setCert(e.target.value)} placeholder="PSA certificate number"/>}
+   <div className="mode-row"><button className={mode==='quick'?'on':''} onClick={()=>setMode('quick')}>Search Card</button><button className={mode==='scan'?'on':''} onClick={()=>setMode('scan')}>Scan Card</button><button className={mode==='cert'?'on':''} onClick={()=>setMode('cert')}>PSA Cert</button></div>
+   {mode==='quick'?<textarea value={q} onChange={e=>setQ(e.target.value)} placeholder="Paste or type a card listing"/>:mode==='cert'?<input value={cert} onChange={e=>setCert(e.target.value)} placeholder="PSA certificate number"/>:<div className="scan-panel"><label className="scan-upload"><img src={scanPreview||'/IMG_4838.jpeg'} alt="Scan a card"/><span>{scanPreview?'Card photo selected':'Take or choose a card photo'}</span><input type="file" accept="image/*" capture="environment" onChange={e=>chooseScan(e.target.files?.[0])}/></label><p>Use your camera or photo library to identify a card, then Gauge can evaluate its market.</p></div>}
    <label>GRADE</label><div className="grade-row">{grades.map(g=><button key={g} className={grade===g?'on':''} onClick={()=>setGrade(g)}>{g}</button>)}</div>
-   <button className="find" onClick={run} disabled={loading}>{loading?'Checking market…':'Find card'}</button>
+   <button className="find" onClick={run} disabled={loading}>{loading?'Checking market…':mode==='scan'?'Identify card':'Find card'}</button>
   </section>
   {!data&&!loading?<section className="gauge-intro"><h2>One card. Four answers.</h2><div className="intro-grid"><span><b>Value</b>Current market value</span><span><b>Range</b>Recent sold range</span><span><b>Liquidity</b>How easily it sells</span><span><b>Grade Check</b>Potential grading upside</span></div></section>:null}
   {data?.error?<div className="error">{data.error}</div>:null}
@@ -30,6 +31,6 @@ export default function GaugePage(){
    <section className="sales"><div className="sales-head"><label>RECENT SALES</label><span>{data.comps?.length??0} shown</span></div>{(data.comps??[]).slice(0,5).map((s,i)=><div className="sale-row" key={`${s.id}-${i}`}><b>{money(s.price)}</b><span>{s.soldAt?new Date(s.soldAt).toLocaleDateString():'Recent'}</span><span>{s.source??'Sold'}</span></div>)}</section>
   </>:null}
   <div className="nav-space"/>
-  <nav className="gauge-nav" style={{gridTemplateColumns:'repeat(6,1fr)'}}><a href="/">∿<small>Pulse</small></a><a href="/market">⌁<small>Market</small></a><button className="scan" aria-label="Scan card"><img src="/IMG_4838.jpeg" alt=""/></button><a href="/collection-demo?view=collection">▥<small>My Collection</small></a><a className="on" href="/gauge">◎<small>Gauge</small></a><button>☰<small>More</small></button></nav>
+  <nav className="gauge-nav" style={{gridTemplateColumns:'repeat(5,1fr)'}}><a href="/">∿<small>Pulse</small></a><a href="/market">⌁<small>Market</small></a><a href="/collection-demo?view=collection">▥<small>My Collection</small></a><a className="on" href="/gauge">◎<small>Gauge</small></a><button>☰<small>More</small></button></nav>
  </main>
 }
