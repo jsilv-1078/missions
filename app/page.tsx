@@ -1,5 +1,6 @@
 import { PulseFeed } from "./pulse-feed";
 import AppNav from "./components/AppNav";
+import PulseGaugeBridge from "./components/PulseGaugeBridge";
 import { getFeedStories } from "@/lib/db";
 import { remixFeedStories } from "@/lib/feed-order";
 
@@ -17,5 +18,5 @@ export default async function Home() {
     if (value < 10 && move > 60) return false;
     return true;
   });
-  return <><PulseFeed initialStories={remixFeedStories(cleanerStories)} showIntroInitially={false}/><AppNav active="pulse"/></>;
+  return <><PulseFeed initialStories={remixFeedStories(cleanerStories)} showIntroInitially={false}/><PulseGaugeBridge/><AppNav active="pulse"/></>;
 }
