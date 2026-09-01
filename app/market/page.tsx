@@ -44,7 +44,7 @@ export default function MarketPage(){
 
   <section className="market-list" id="most-active">
    <div className="section-title"><p>MOST ACTIVE</p><span>Top CM100 cards</span></div>
-   {cm100.slice(0,10).map((c,i)=><a className="sport-index" key={c.id} href={`/gauge?search=${encodeURIComponent(c.name+(c.meta?` ${c.meta}`:''))}`}><div className="sport-main"><div><label>#{i+1} · {c.category||'SPORTS'}</label><h3>{c.name}</h3><strong>{num(c.sales7)} sales</strong><span className={validMove(c.move7)?(c.move7>=0?'up':'down'):''}>{validMove(c.move7)?`${pct(c.move7)} · 7D`:'7D price move unavailable'}</span></div></div><div className="market-open">Research in Gauge <b>›</b></div></a>)}
+   {cm100.slice(0,10).map((c,i)=>{const query=c.name+(c.meta?` ${c.meta}`:'');return <a className="sport-index" key={c.id} href={`/gauge?q=${encodeURIComponent(query)}`}><div className="sport-main"><div><label>#{i+1} · {c.category||'SPORTS'}</label><h3>{c.name}</h3><strong>{num(c.sales7)} sales</strong><span className={validMove(c.move7)?(c.move7>=0?'up':'down'):''}>{validMove(c.move7)?`${pct(c.move7)} · 7D`:'7D price move unavailable'}</span></div></div><div className="market-open">Research in Gauge <b>›</b></div></a>})}
   </section>
 
   {composition.length?<section className="method"><p>CM100 COMPOSITION</p><h3>Where trading activity is concentrated</h3>{composition.map(x=>{const share=Math.round(x.count/cm100.length*100);return <div key={x.name} className="market-open"><span>{x.name}</span><b>{share}%</b></div>})}</section>:null}
