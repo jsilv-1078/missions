@@ -9,6 +9,7 @@ function normCard(card:Card){const price=priceFor(card);return{id:card.card_id,n
 function compsRows(payload:any){const arr=payload?.raw_prices??payload?.prices??payload?.sales??[];if(!Array.isArray(arr))return[];return arr.slice(0,10).map((x:any)=>({price:Number(x.price??x.sold_price??x.amount??0),date:String(x.date??x.sold_at??x.sale_date??''),marketplace:String(x.marketplace??x.source??'eBay'),title:String(x.title??x.description??''),type:String(x.sale_type??x.listing_type??'Sold'),url:String(x.url??x.item_url??'')})).filter((x:any)=>x.price>0)}
 function firstGood(cards:Card[]|undefined){return(cards??[]).find(c=>priceFor(c)>0&&c.image)??cards?.[0]}
 function rankActive(cards:Card[]|undefined,limit=100){const seen=new Set<string>();return(cards??[]).map(normCard).filter(x=>x.sales7>0&&!seen.has(x.id)&&!!seen.add(x.id)).sort((a,b)=>b.sales7-a.sales7).slice(0,limit).map((x,i)=>({...x,rank:i+1}))}
+function mergeActive(groups:Array<ReturnType<typeof rankActive>>,limit=100){const seen=new Set<string>();return groups.flat().filter(x=>x.sales7>0&&!seen.has(x.id)&&!!seen.add(x.id)).sort((a,b)=>b.sales7-a.sales7).slice(0,limit).map((x,i)=>({...x,rank:i+1}))}
 async function detailFor(card:Card,costBasis:number){const selected=normCard(card);const grade=card.prices?.find(x=>x.grade==='PSA 10')?'PSA 10':card.prices?.[0]?.grade||'PSA 10';const [fmvRes,compsRes]=await Promise.allSettled([ch<any>('/v1/cards/card-fmv',{card_id:card.card_id,grade}),ch<any>('/v1/cards/comps',{card_id:card.card_id,count:10,grade,include_raw_prices:true,time_weighted:true})]);const fmvPayload=fmvRes.status==='fulfilled'?fmvRes.value:{};const fmv=fmvPayload?.fmv??fmvPayload;const current=Number(fmv?.price??selected.value);const comps=compsRes.status==='fulfilled'?compsRows(compsRes.value):[];const compPrices=comps.map((x:any)=>x.price);const gain=current-costBasis;return {...selected,value:current,displayValue:money(current),paid:costBasis,gain,displayGain:`${gain>=0?'+':'−'}$${Math.abs(gain).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,confidence:String(fmv?.confidence_grade??''),freshnessDays:Number(fmv?.freshness_days??0),rangeLow:compPrices.length?Math.min(...compPrices):0,rangeHigh:compPrices.length?Math.max(...compPrices):0,comps}}
 
 export async function GET(){
@@ -23,15 +24,18 @@ export async function GET(){
   ])
 
   const activeResults=await Promise.allSettled([
-   ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{sort_by:'sales_7day',sort_order:'desc',page:1,page_size:100}),
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Basketball',sort_by:'sales_7day',sort_order:'desc',page:1,page_size:100}),
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Football',sort_by:'sales_7day',sort_order:'desc',page:1,page_size:100}),
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Baseball',sort_by:'sales_7day',sort_order:'desc',page:1,page_size:100}),
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Hockey',sort_by:'sales_7day',sort_order:'desc',page:1,page_size:100})
   ])
   const cardsAt=(i:number)=>activeResults[i]?.status==='fulfilled'?(activeResults[i] as PromiseFulfilledResult<{cards?:Card[]}>).value.cards:[]
-  const cm100=rankActive(cardsAt(0),100)
-  const sportActive={Basketball:rankActive(cardsAt(1),100),Football:rankActive(cardsAt(2),100),Baseball:rankActive(cardsAt(3),100),Hockey:rankActive(cardsAt(4),100)}
+  const basketball=rankActive(cardsAt(0),100)
+  const football=rankActive(cardsAt(1),100)
+  const baseball=rankActive(cardsAt(2),100)
+  const hockey=rankActive(cardsAt(3),100)
+  const sportActive={Basketball:basketball,Football:football,Baseball:baseball,Hockey:hockey}
+  const cm100=mergeActive([basketball,football,baseball,hockey],100)
 
   const movers=core.slice(0,3).flatMap(x=>x.cards??[]).map(normCard).filter(x=>x.image&&x.value>0&&Number.isFinite(x.move30)).sort((a,b)=>b.move30-a.move30).slice(0,8)
   const wembyCandidates=(core[3].cards??[]).filter(c=>String(c.number??'')==='136'||(c.description??'').includes('#136'))
