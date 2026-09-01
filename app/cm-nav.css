@@ -2,7 +2,7 @@
 .cm-bottom-nav{position:fixed;left:50%;bottom:0;z-index:1000;width:min(430px,100%);height:var(--cm-nav-height);transform:translateX(-50%);display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;align-items:center;border-top:1px solid #242824;background:rgba(15,17,16,.98);padding-bottom:var(--cm-nav-safe);box-sizing:content-box}.cm-nav-item{height:var(--cm-nav-height);border:0;background:transparent;color:#8e938f;text-decoration:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:inherit;cursor:pointer}.cm-nav-icon{font-size:22px;line-height:1}.cm-nav-item small{font-size:10px;font-weight:700;line-height:1}.cm-nav-item.selected{color:#28d95a}.cm-scan-button{width:56px;height:56px;justify-self:center;border:5px solid #102016;border-radius:50%;background:#28d95a;color:#061109;font-size:25px;display:grid;place-items:center;cursor:pointer}
 
 /* Pulse was originally designed for the full viewport. Reserve the bottom-nav
-   area so each swipe page remains completely visible instead of sitting behind it. */
+   area so every screen, including onboarding, fits above the shared navigation. */
 .app-shell{height:calc(100dvh - var(--cm-nav-height) - var(--cm-nav-safe))!important;min-height:calc(100dvh - var(--cm-nav-height) - var(--cm-nav-safe))!important}
 .feed{height:100%!important}
 .pulse-story{height:100%!important;min-height:100%!important;contain-intrinsic-size:auto calc(100dvh - var(--cm-nav-height) - var(--cm-nav-safe))!important}
@@ -10,4 +10,11 @@
 .story-face{padding-bottom:max(12px,env(safe-area-inset-bottom))!important}
 .editorial-face{padding-bottom:12px!important}
 
+/* The welcome/explainer previously stayed at 100dvh inside the now-shorter
+   app shell, which pushed START EXPLORING below the clipped area. */
+.pulse-intro{height:100%!important;min-height:100%!important;max-height:100%!important;overflow:hidden!important;padding-bottom:10px!important}
+.pulse-intro .intro-body{min-height:0!important}
+.pulse-intro .intro-start{flex:none!important;position:relative!important;bottom:auto!important;margin-top:8px!important;margin-bottom:0!important}
+
+@media(max-height:760px){.pulse-intro .intro-body{transform:scale(.94);transform-origin:top center;margin-bottom:-18px}.pulse-intro .intro-start{min-height:48px!important}}
 @media(min-width:700px){.cm-bottom-nav{bottom:28px;border-radius:0 0 28px 28px}.app-shell{height:calc(100dvh - var(--cm-nav-height) - 56px)!important;min-height:calc(100dvh - var(--cm-nav-height) - 56px)!important}}
