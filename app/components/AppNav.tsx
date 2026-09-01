@@ -16,7 +16,11 @@ function Icon({name}:{name:Tab|'more'}){
 export default function AppNav({active}:{active:Tab}){
  const [more,setMore]=useState(false)
  return <>
-  <nav className="cm-bottom-nav" aria-label="Card Madness navigation">
+  <nav
+   className="cm-bottom-nav"
+   aria-label="Card Madness navigation"
+   style={{position:'fixed',left:0,right:0,bottom:0,width:'100%',maxWidth:480,margin:'0 auto',zIndex:1000}}
+  >
    <a className={`cm-nav-item ${active==='pulse'?'selected':''}`} href="/"><Icon name="pulse"/><small>Pulse</small></a>
    <a className={`cm-nav-item ${active==='market'?'selected':''}`} href="/market"><Icon name="market"/><small>Market</small></a>
    <a className={`cm-nav-item ${active==='collection'?'selected':''}`} href="/collection"><Icon name="collection"/><small>Collection</small></a>
