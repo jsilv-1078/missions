@@ -10,6 +10,7 @@ function compsRows(payload:any){const arr=payload?.raw_prices??payload?.prices??
 function firstGood(cards:Card[]|undefined){return(cards??[]).find(c=>priceFor(c)>0&&c.image)??cards?.[0]}
 function rankActive(cards:Card[]|undefined,limit=100){const seen=new Set<string>();return(cards??[]).map(normCard).filter(x=>x.sales7>0&&!seen.has(x.id)&&!!seen.add(x.id)).sort((a,b)=>b.sales7-a.sales7).slice(0,limit).map((x,i)=>({...x,rank:i+1}))}
 function mergeActive(groups:Array<ReturnType<typeof rankActive>>,limit=100){const seen=new Set<string>();return groups.flat().filter(x=>x.sales7>0&&!seen.has(x.id)&&!!seen.add(x.id)).sort((a,b)=>b.sales7-a.sales7).slice(0,limit).map((x,i)=>({...x,rank:i+1}))}
+async function fetchActiveSport(category:string){const pages=await Promise.allSettled([1,2,3].map(page=>ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category,sort_by:'sales_7day',sort_order:'desc',page,page_size:100})));return pages.flatMap(result=>result.status==='fulfilled'?(result.value.cards??[]):[])}
 async function detailFor(card:Card,costBasis:number){const selected=normCard(card);const grade=card.prices?.find(x=>x.grade==='PSA 10')?'PSA 10':card.prices?.[0]?.grade||'PSA 10';const [fmvRes,compsRes]=await Promise.allSettled([ch<any>('/v1/cards/card-fmv',{card_id:card.card_id,grade}),ch<any>('/v1/cards/comps',{card_id:card.card_id,count:10,grade,include_raw_prices:true,time_weighted:true})]);const fmvPayload=fmvRes.status==='fulfilled'?fmvRes.value:{};const fmv=fmvPayload?.fmv??fmvPayload;const current=Number(fmv?.price??selected.value);const comps=compsRes.status==='fulfilled'?compsRows(compsRes.value):[];const compPrices=comps.map((x:any)=>x.price);const gain=current-costBasis;return {...selected,value:current,displayValue:money(current),paid:costBasis,gain,displayGain:`${gain>=0?'+':'−'}$${Math.abs(gain).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,confidence:String(fmv?.confidence_grade??''),freshnessDays:Number(fmv?.freshness_days??0),rangeLow:compPrices.length?Math.min(...compPrices):0,rangeHigh:compPrices.length?Math.max(...compPrices):0,comps}}
 
 export async function GET(){
@@ -23,17 +24,16 @@ export async function GET(){
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{search:'Shohei Ohtani 2018 Bowman',category:'Baseball',page:1,page_size:30,sort_by:'sales_30day',sort_order:'desc'})
   ])
 
-  const activeResults=await Promise.allSettled([
-   ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Basketball',sort_by:'sales_7day',sort_order:'desc',page:1,page_size:100}),
-   ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Football',sort_by:'sales_7day',sort_order:'desc',page:1,page_size:100}),
-   ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Baseball',sort_by:'sales_7day',sort_order:'desc',page:1,page_size:100}),
-   ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Hockey',sort_by:'sales_7day',sort_order:'desc',page:1,page_size:100})
+  const [basketballRaw,footballRaw,baseballRaw,hockeyRaw]=await Promise.all([
+   fetchActiveSport('Basketball'),
+   fetchActiveSport('Football'),
+   fetchActiveSport('Baseball'),
+   fetchActiveSport('Hockey')
   ])
-  const cardsAt=(i:number)=>activeResults[i]?.status==='fulfilled'?(activeResults[i] as PromiseFulfilledResult<{cards?:Card[]}>).value.cards:[]
-  const basketball=rankActive(cardsAt(0),100)
-  const football=rankActive(cardsAt(1),100)
-  const baseball=rankActive(cardsAt(2),100)
-  const hockey=rankActive(cardsAt(3),100)
+  const basketball=rankActive(basketballRaw,100)
+  const football=rankActive(footballRaw,100)
+  const baseball=rankActive(baseballRaw,100)
+  const hockey=rankActive(hockeyRaw,100)
   const sportActive={Basketball:basketball,Football:football,Baseball:baseball,Hockey:hockey}
   const cm100=mergeActive([basketball,football,baseball,hockey],100)
 
