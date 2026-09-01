@@ -14,7 +14,7 @@ const fmtPct=(n:number)=>`${n>=0?'+':'−'}${Math.abs(n).toFixed(1)}%`
 
 export default function CollectionPage(){
  const [data,setData]=useState<LiveData|null>(null),[selectedId,setSelectedId]=useState(''),[detailsOpen,setDetailsOpen]=useState(false),[period,setPeriod]=useState('7D')
- useEffect(()=>{let stop=false;const load=async()=>{try{const r=await fetch('/api/collection-demo/live',{cache:'no-store'});const j=await r.json();if(!stop){setData(j);if(!selectedId&&j?.holdings?.[0]?.id)setSelectedId(j.holdings[0].id)}}catch{if(!stop)setData({live:false,updatedAt:new Date().toISOString()})}};load();const id=setInterval(load,120000);return()=>{stop=true;clearInterval(id)}},[selectedId])
+ useEffect(()=>{let stop=false;const load=async()=>{try{const r=await fetch('/api/collection-demo/live',{cache:'no-store'});const j=await r.json();if(!stop)setData(j)}catch{if(!stop)setData({live:false,updatedAt:new Date().toISOString()})}};load();const id=setInterval(load,120000);return()=>{stop=true;clearInterval(id)}},[])
  const holdings=data?.holdings?.length?data.holdings:mockHoldings
  const selected=holdings.find(h=>h.id===selectedId)
  const detail=selected?(data?.details?.find(d=>d.id===selected.id)??(data?.detail?.id===selected.id?data.detail:null)??selected):null
