@@ -1,6 +1,7 @@
 'use client'
 
-import {useState} from 'react'
+import {useEffect,useState} from 'react'
+import {createPortal} from 'react-dom'
 
 type Tab='pulse'|'market'|'collection'|'gauge'
 
@@ -15,12 +16,12 @@ function Icon({name}:{name:Tab|'more'}){
 
 export default function AppNav({active}:{active:Tab}){
  const [more,setMore]=useState(false)
- return <>
-  <nav
-   className="cm-bottom-nav"
-   aria-label="Card Madness navigation"
-   style={{position:'fixed',left:0,right:0,bottom:0,width:'100%',maxWidth:480,margin:'0 auto',zIndex:1000}}
-  >
+ const [mounted,setMounted]=useState(false)
+ useEffect(()=>setMounted(true),[])
+ if(!mounted)return null
+
+ const nav=<>
+  <nav className="cm-bottom-nav" aria-label="Card Madness navigation" style={{position:'fixed',left:'50%',transform:'translateX(-50%)',bottom:0,width:'min(100vw,480px)',zIndex:1000}}>
    <a className={`cm-nav-item ${active==='pulse'?'selected':''}`} href="/"><Icon name="pulse"/><small>Pulse</small></a>
    <a className={`cm-nav-item ${active==='market'?'selected':''}`} href="/market"><Icon name="market"/><small>Market</small></a>
    <a className={`cm-nav-item ${active==='collection'?'selected':''}`} href="/collection"><Icon name="collection"/><small>Collection</small></a>
@@ -29,4 +30,6 @@ export default function AppNav({active}:{active:Tab}){
   </nav>
   {more?<div className="cm-more-backdrop" onClick={()=>setMore(false)} role="presentation"><section className="cm-more-sheet" onClick={e=>e.stopPropagation()} aria-label="More Card Madness options"><div className="cm-more-handle"/><div className="cm-more-title"><div><span>CARD MADNESS</span><h2>More</h2></div><button onClick={()=>setMore(false)} aria-label="Close">×</button></div><a href="/">Open Pulse<span>›</span></a><a href="/market">View Markets<span>›</span></a><a href="/collection">View Collection<span>›</span></a><a href="/gauge">Research a card<span>›</span></a><button className="cm-more-refresh" onClick={()=>window.location.reload()}>Refresh current page<span>↻</span></button></section></div>:null}
  </>
+
+ return createPortal(nav,document.body)
 }
