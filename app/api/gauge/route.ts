@@ -2,6 +2,7 @@ import { NextRequest,NextResponse } from 'next/server'
 
 const BASE='https://api.cardhedger.com'
 type ApiResult={ok:boolean;status:number;payload:any}
+type TrendRow={date:string;price:number}
 
 async function post(path:string,body:Record<string,unknown>):Promise<ApiResult>{
  const key=process.env.CARDHEDGE_API_KEY
@@ -13,10 +14,10 @@ async function post(path:string,body:Record<string,unknown>):Promise<ApiResult>{
 function num(v:any){const n=Number(v);return Number.isFinite(n)&&n>=0?n:undefined}
 function image(v:any){if(typeof v!=='string'||!v.trim())return undefined;return v.startsWith('//')?`https:${v}`:v}
 function sales(payload:any){const raw=payload?.raw_prices??payload?.prices??payload?.sales??[];if(!Array.isArray(raw))return[];return raw.map((x:any,i:number)=>({id:String(x?.id??x?.sale_id??i),price:num(x?.price??x?.sale_price??x?.value),soldAt:x?.sale_date??x?.sold_at??x?.closing_date??x?.date,source:x?.marketplace??x?.source??x?.price_source??'Sold',url:x?.sale_url??x?.url})).filter((x:any)=>x.price!=null)}
-function trend(payload:any){const raw=payload?.prices??[];return Array.isArray(raw)?raw.map((x:any)=>({date:x?.closing_date??x?.sale_date??x?.date,price:num(x?.price)})).filter((x:any)=>x.date&&x.price!=null):[]}
+function trend(payload:any):TrendRow[]{const raw=payload?.prices??[];if(!Array.isArray(raw))return[];const out:TrendRow[]=[];for(const x of raw){const date=x?.closing_date??x?.sale_date??x?.date,price=num(x?.price);if(date&&price!=null)out.push({date:String(date),price})}return out}
 function median(values:number[]){if(!values.length)return undefined;const s=[...values].sort((a,b)=>a-b),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2}
-function trendSummary(items:Array<{date:string;price:number}>){const rows=items.map(x=>({...x,ts:new Date(x.date).getTime()})).filter(x=>Number.isFinite(x.ts)).sort((a,b)=>a.ts-b.ts);if(rows.length<2)return{percentChange:undefined,direction:'unknown',salesUsed:rows.length};const w=Math.max(1,Math.min(5,Math.floor(rows.length/3)));const a=median(rows.slice(0,w).map(x=>x.price)),b=median(rows.slice(-w).map(x=>x.price));const pct=a&&b?((b-a)/a)*100:undefined;return{percentChange:pct,direction:pct==null?'unknown':pct>3?'rising':pct<-3?'falling':'flat',salesUsed:rows.length}}
-function liquidity(items:Array<{date:string;price:number}>){const now=Date.now(),day=86400000;const dated=items.map(x=>({...x,ts:new Date(x.date).getTime()})).filter(x=>Number.isFinite(x.ts)&&x.ts<=now);if(!dated.length)return undefined;const sales30=dated.filter(x=>now-x.ts<=30*day).length,sales90=dated.filter(x=>now-x.ts<=90*day).length,last=Math.max(...dated.map(x=>x.ts)),days=Math.max(0,(now-last)/day);const clamp=(v:number)=>Math.max(0,Math.min(1,v));const score=Math.round((clamp(sales30/12)*.45+clamp(sales90/24)*.35+clamp(1-days/45)*.2)*100)/10;return{score,label:score>=9?'Extremely liquid':score>=7?'High':score>=5?'Moderate':score>=3?'Low':'Very low',sales30,sales90,lastSaleDays:Math.round(days)}}
+function trendSummary(items:TrendRow[]){const rows=items.map(x=>({...x,ts:new Date(x.date).getTime()})).filter(x=>Number.isFinite(x.ts)).sort((a,b)=>a.ts-b.ts);if(rows.length<2)return{percentChange:undefined,direction:'unknown',salesUsed:rows.length};const w=Math.max(1,Math.min(5,Math.floor(rows.length/3)));const a=median(rows.slice(0,w).map(x=>x.price)),b=median(rows.slice(-w).map(x=>x.price));const pct=a&&b?((b-a)/a)*100:undefined;return{percentChange:pct,direction:pct==null?'unknown':pct>3?'rising':pct<-3?'falling':'flat',salesUsed:rows.length}}
+function liquidity(items:TrendRow[]){const now=Date.now(),day=86400000;const dated=items.map(x=>({...x,ts:new Date(x.date).getTime()})).filter(x=>Number.isFinite(x.ts)&&x.ts<=now);if(!dated.length)return undefined;const sales30=dated.filter(x=>now-x.ts<=30*day).length,sales90=dated.filter(x=>now-x.ts<=90*day).length,last=Math.max(...dated.map(x=>x.ts)),days=Math.max(0,(now-last)/day);const clamp=(v:number)=>Math.max(0,Math.min(1,v));const score=Math.round((clamp(sales30/12)*.45+clamp(sales90/24)*.35+clamp(1-days/45)*.2)*100)/10;return{score,label:score>=9?'Extremely liquid':score>=7?'High':score>=5?'Moderate':score>=3?'Low':'Very low',sales30,sales90,lastSaleDays:Math.round(days)}}
 async function pricing(id:string,grade:string){const[c,f]=await Promise.all([post('/v1/cards/comps',{card_id:id,count:10,grade,include_raw_prices:true,time_weighted:true}),post('/v1/cards/card-fmv',{card_id:id,grade})]);return{sales:c.ok?sales(c.payload):[],fmv:f.ok?num(f.payload?.price??f.payload?.fmv?.price):undefined}}
 
 export async function GET(req:NextRequest){
@@ -33,7 +34,7 @@ export async function GET(req:NextRequest){
    post('/v1/cards/prices-by-card',{card_id:id,grade,days:90}),
    pricing(id,'Raw'),pricing(id,'PSA 9'),pricing(id,'PSA 10')
   ])
-  const trendRows=tr.ok?trend(tr.payload):[]
+  const trendRows:TrendRow[]=tr.ok?trend(tr.payload):[]
   const prices=exact.sales.map((x:any)=>x.price).filter((x:number)=>Number.isFinite(x))
   const rawValue=raw.fmv,psa9Value=psa9.fmv,psa10Value=psa10.fmv,gradingCost=79.99
   const psa9Net=rawValue!=null&&psa9Value!=null?psa9Value-rawValue-gradingCost:undefined
