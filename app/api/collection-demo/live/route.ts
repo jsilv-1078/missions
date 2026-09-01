@@ -8,25 +8,26 @@ function money(n:number){return Number.isFinite(n)?`$${n.toLocaleString('en-US',
 function normCard(card:Card){const price=priceFor(card);return{id:card.card_id,name:card.player||card.description||'Card',meta:card.description||card.set||'',set:card.set||'',number:String(card.number??''),variant:card.variant||'',image:card.image||'',category:card.category||'',value:price,displayValue:money(price),move7:Number(card.gain??0),move30:Number(card.gain_30day??card.gain??0),sales7:Number(card['7 Day Sales']??0),sales30:Number(card['30 Day Sales']??0),grade:card.prices?.find(x=>x.grade==='PSA 10')?'PSA 10':card.prices?.[0]?.grade||''}}
 function compsRows(payload:any){const arr=payload?.raw_prices??payload?.prices??payload?.sales??[];if(!Array.isArray(arr))return[];return arr.slice(0,10).map((x:any)=>({price:Number(x.price??x.sold_price??x.amount??0),date:String(x.date??x.sold_at??x.sale_date??''),marketplace:String(x.marketplace??x.source??'eBay'),title:String(x.title??x.description??''),type:String(x.sale_type??x.listing_type??'Sold'),url:String(x.url??x.item_url??'')})).filter((x:any)=>x.price>0)}
 function firstGood(cards:Card[]|undefined){return(cards??[]).find(c=>priceFor(c)>0&&c.image)??cards?.[0]}
-
 async function detailFor(card:Card,costBasis:number){const selected=normCard(card);const grade=card.prices?.find(x=>x.grade==='PSA 10')?'PSA 10':card.prices?.[0]?.grade||'PSA 10';const [fmvRes,compsRes]=await Promise.allSettled([ch<any>('/v1/cards/card-fmv',{card_id:card.card_id,grade}),ch<any>('/v1/cards/comps',{card_id:card.card_id,count:10,grade,include_raw_prices:true,time_weighted:true})]);const fmvPayload=fmvRes.status==='fulfilled'?fmvRes.value:{};const fmv=fmvPayload?.fmv??fmvPayload;const current=Number(fmv?.price??selected.value);const comps=compsRes.status==='fulfilled'?compsRows(compsRes.value):[];const compPrices=comps.map((x:any)=>x.price);const gain=current-costBasis;return {...selected,value:current,displayValue:money(current),paid:costBasis,gain,displayGain:`${gain>=0?'+':'−'}$${Math.abs(gain).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,confidence:String(fmv?.confidence_grade??''),freshnessDays:Number(fmv?.freshness_days??0),rangeLow:compPrices.length?Math.min(...compPrices):0,rangeHigh:compPrices.length?Math.max(...compPrices):0,comps}}
 
 export async function GET(){
  try{
-  const searches=await Promise.all([
+  const core=await Promise.all([
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Basketball',sort_by:'gain_30day',sort_order:'desc',page:1,page_size:12}),
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Football',sort_by:'gain_30day',sort_order:'desc',page:1,page_size:12}),
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{category:'Baseball',sort_by:'gain_30day',sort_order:'desc',page:1,page_size:12}),
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{player:'Victor Wembanyama',category:'Basketball',page:1,page_size:100,sort_by:'sales_30day',sort_order:'desc'}),
    ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{search:'Patrick Mahomes Travis Kelce Downtown Duos',category:'Football',page:1,page_size:30,sort_by:'sales_30day',sort_order:'desc'}),
-   ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{search:'Shohei Ohtani 2018 Bowman',category:'Baseball',page:1,page_size:30,sort_by:'sales_30day',sort_order:'desc'}),
-   ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{sort_by:'sales_7day',sort_order:'desc',page:1,page_size:500}),
+   ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{search:'Shohei Ohtani 2018 Bowman',category:'Baseball',page:1,page_size:30,sort_by:'sales_30day',sort_order:'desc'})
   ])
-  const movers=searches.slice(0,3).flatMap(x=>x.cards??[]).map(normCard).filter(x=>x.image&&x.value>0&&Number.isFinite(x.move30)).sort((a,b)=>b.move30-a.move30).slice(0,8)
-  const cm500=(searches[6].cards??[]).map(normCard).filter(x=>x.sales7>0).sort((a,b)=>b.sales7-a.sales7).slice(0,500).map((x,i)=>({...x,rank:i+1}))
-  const wembyCandidates=(searches[3].cards??[]).filter(c=>String(c.number??'')==='136'||(c.description??'').includes('#136'))
-  const wembyRaw=wembyCandidates.find(c=>(c.set??'').includes('2023')&&((c.variant??'').toLowerCase().includes('base')||(c.description??'').toLowerCase().includes('base')))??wembyCandidates[0]??firstGood(searches[3].cards)
-  const collectionRaw=[wembyRaw,firstGood(searches[4].cards),firstGood(searches[5].cards)].filter(Boolean) as Card[]
+  const cmPages=await Promise.allSettled([1,2,3,4,5].map(page=>ch<{cards?:Card[]}>('/v1/cards/search-cards-wsort',{sort_by:'sales_7day',sort_order:'desc',page,page_size:100})))
+  const cmRaw=cmPages.flatMap(r=>r.status==='fulfilled'?(r.value.cards??[]):[])
+  const seen=new Set<string>()
+  const cm500=cmRaw.map(normCard).filter(x=>x.sales7>0&&!seen.has(x.id)&&!!seen.add(x.id)).sort((a,b)=>b.sales7-a.sales7).slice(0,500).map((x,i)=>({...x,rank:i+1}))
+  const movers=core.slice(0,3).flatMap(x=>x.cards??[]).map(normCard).filter(x=>x.image&&x.value>0&&Number.isFinite(x.move30)).sort((a,b)=>b.move30-a.move30).slice(0,8)
+  const wembyCandidates=(core[3].cards??[]).filter(c=>String(c.number??'')==='136'||(c.description??'').includes('#136'))
+  const wembyRaw=wembyCandidates.find(c=>(c.set??'').includes('2023')&&((c.variant??'').toLowerCase().includes('base')||(c.description??'').toLowerCase().includes('base')))??wembyCandidates[0]??firstGood(core[3].cards)
+  const collectionRaw=[wembyRaw,firstGood(core[4].cards),firstGood(core[5].cards)].filter(Boolean) as Card[]
   const costBases=[100,265,350]
   const holdings=collectionRaw.map((c,i)=>{const n=normCard(c);const paid=costBases[i]??0;const gain=n.value-paid;return{...n,paid,gain,displayGain:`${gain>=0?'+':'−'}$${Math.abs(gain).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`}})
   const details=await Promise.all(collectionRaw.map((card,i)=>detailFor(card,costBases[i]??0)))
